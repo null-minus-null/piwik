@@ -55,8 +55,9 @@ var piwikHelper = {
 	 */
 	addBreakpoints: function(text, breakpointMarkup)
 	{
-		return text.replace(/([\/&=?\.%#:])/g, '$1' +
-			(typeof breakpointMarkup == 'undefined' ? '<wbr>' : breakpointMarkup));
+		return text.replace(/([\/&=?\.%#:_-])/g, '$1' +
+			(typeof breakpointMarkup == 'undefined' ? '<wbr>&#8203;' : breakpointMarkup));
+			 // &#8203; is for internet explorer
 	},
 
 	/**
@@ -72,7 +73,7 @@ var piwikHelper = {
 		}
 		url = piwikHelper.addBreakpoints(url, '|||');
 		url = $(document.createElement('p')).text(url).html();
-		url = url.replace(/\|\|\|/g, '<wbr />');
+		url = url.replace(/\|\|\|/g, '<wbr />&#8203;'); // &#8203; is for internet explorer
 		return url;
 	},
 
@@ -112,6 +113,32 @@ var piwikHelper = {
         });
     },
 
+    getQueryStringWithParametersModified: function (queryString, newParameters) {
+        if (queryString != '') {
+            var r, i, keyvalue, keysvalues = newParameters.split('&');
+            var appendUrl = '';
+            for (i = 0; i < keysvalues.length; i++) {
+                keyvalue = keysvalues[i].split('=');
+                r = new RegExp('(^|[?&])' + keyvalue[0] + '=[^&]*');
+                queryString = queryString.replace(r, '');
+
+                // empty value, eg. &segment=, we remove the parameter from URL entirely
+                if (keyvalue[1].length == 0) {
+                    continue;
+                }
+                appendUrl += '&' + keyvalue[0] + '=' + keyvalue[1];
+            }
+            queryString += appendUrl;
+            if (queryString[0] == '&') {
+                queryString = '?' + queryString.substring(1);
+            }
+        } else {
+            queryString = '?' + newParameters;
+        }
+
+        return queryString;
+    },
+
     /**
      * Returns the current query string with the given parameters modified
      * @param {object} newparams parameters to be modified
@@ -119,24 +146,33 @@ var piwikHelper = {
      */
     getCurrentQueryStringWithParametersModified: function(newparams)
     {
-        var parameters = String(window.location.search);
-        if(newparams) {
-            if(parameters != '') {
-                var r, i, keyvalue, keysvalues = newparams.split('&');
-                for(i in keysvalues) {
-                    keyvalue = keysvalues[i].split('=');
-                    r = new RegExp('(^|[?&])'+keyvalue[0]+'=[^&]*');
-                    parameters = parameters.replace(r, '');
-                }
-                parameters += '&' + newparams;
-                if(parameters[0] == '&') {
-                    parameters = '?' + parameters.substring(1);
-                }
-            } else {
-                parameters = '?' + newparams;
-            }
+        var queryString = String(window.location.search);
+        if (newparams) {
+            queryString = this.getQueryStringWithParametersModified(queryString, newparams);
         }
-        return String(window.location.pathname) + parameters;
+        var value = String(window.location.pathname) + queryString;
+
+        return value;
+    },
+
+  /**
+   * Given param1=v1&param2=k2
+   * returns: { "param1": "v1", "param2": "v2" }
+   *
+   * @param query string
+   * @return {Object}
+   */
+    getArrayFromQueryString: function (query) {
+      var params = {};
+      var vars = query.split("&");
+      for (var i=0;i<vars.length;i++) {
+        var keyValue = vars[i].split("=");
+        // Jquery will urlencode these, but we wish to keep the current raw value
+        // use case: &segment=visitorId%3D%3Dabc...
+        var rawValue = decodeURIComponent(keyValue[1]);
+        params[keyValue[0]] = rawValue;
+      }
+      return params;
     },
 
     /**
@@ -344,6 +380,9 @@ var piwikHelper = {
      */
     getApiFormatTextarea: function (textareaContent)
     {
+        if(typeof textareaContent == 'undefined') {
+            return '';
+        }
         return textareaContent.trim().split("\n").join(',');
     }
 

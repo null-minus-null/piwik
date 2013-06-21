@@ -28,6 +28,12 @@ blockquote,q {
 label {
 	cursor:pointer;
 }
+
+/* IE < 9 will use this */
+html.old-ie .ie-hide { 
+	display: none; 
+}
+
 /* remember to define focus styles! */
 :focus {
 	outline: 0;
@@ -72,6 +78,15 @@ a {
 .loadingPiwik img {
 	margin-right:5px;
 }
+
+.loadingSegment {
+    color: grey;
+    display: block;
+    font-size: 10pt;
+    margin-left: 28px;
+    display:none;
+}
+
 #loadingError {
 	font-weight: bold;
 	font-size: 1.1em;
@@ -99,27 +114,36 @@ a {
 }
 
 #periodString {
-	display:block; 
-	background:#f7f7f7;
+	display:block;
 	color:#444;
-	font-size:14px; 
-	border: 1px solid #e4e5e4;
-	padding:5px 10px 6px 10px;
-	border-radius:4px;
-	-moz-border-radius:4px;
-	-webkit-border-radius:4px;
-	float:left; 
-	margin-right:12px;
-	z-index:999;
-	position:absolute;
+    font-size:14px;
+    border: 1px solid #e4e5e4;
+    padding:5px 30px 6px 10px;
+    border-radius:4px;
+    -moz-border-radius:4px;
+    -webkit-border-radius:4px;
+    float:left;
+    margin-right:12px;
+    z-index:999;
+    position:absolute;
+    background-color: #f7f7f7;
 }
 #periodString:hover {
-	background:#f1f0eb;
+	background-color:#f1f0eb;
 	border-color:#a9a399;
 }
+#periodString .calendar-icon {
+  width: 13px;
+  height: 15px;
+  display:inline-block;
+  position:absolute;
+  right:9px;
+  top:7px;
+  background: url("images/icon-calendar.gif") no-repeat scroll;
+  cursor:pointer;
+}
 #periodString #date{
-	cursor:pointer; 
-	display:inline-block; 
+	cursor:pointer;
 	padding:5px 10px 6px 10px;
 	margin:-5px -10px -6px -10px;
 	
@@ -448,9 +472,13 @@ a {
 	-moz-border-radius:3px;
 	-webkit-border-radius:3px;
 }
-/* extending the jquery UI css for inline help */
-.ui-widget { 
-	text-align:justify;
+/* extending the jquery UI css, for visitor Log popover */
+.ui-widget .dataTable {
+    font-size: 14px;
+}
+/* for inline help */
+.ui-widget {
+    text-align:justify;
 }
 
 .ui-inline-help {
@@ -714,9 +742,9 @@ table.entityTable tr td a {
 }
 
 
-/* Piwik Tooltip (plugins/CoreHome/templates/tooltip.js) */
+/* Piwik jQuery UI Tooltips */
 
-.piwik-tooltip {
+.ui-tooltip {
 	position: absolute;
 	z-index: 2000;
 	text-align: left;
@@ -733,11 +761,28 @@ table.entityTable tr td a {
 	-webkit-box-shadow: 1px 1px 2px #666;
 	box-shadow: 1px 1px 2px #666;
 	overflow: hidden;
+    max-width: 600px;
+   	min-width: 50px;
+    line-height: 14px;
+	left: -28000px;
+	top: -28000px;
+	display: none;
+	font-family: Arial, Helvetica, sans-serif; 
 }
 
-.piwik-tooltip .tip-title {
+.ui-tooltip h3 {
 	font-weight: bold;
 	color: #7E7363;
+}
+
+.ui-tooltip h3 {
+	font-size: 12px;
+	margin: 0 0 2px 0;
+}
+
+body .ui-tooltip.small {
+    font-size: 11px;
+    padding: 3px 5px 3px 6px;
 }
 
 

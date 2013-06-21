@@ -8,13 +8,14 @@
 /**
  * Tests extending DatabaseTestCase are much slower to run: the setUp will
  * create all Piwik tables in a freshly empty test database.
- * 
- * This allows each test method to start from a clean DB and setup initial state to 
+ *
+ * This allows each test method to start from a clean DB and setup initial state to
  * then test it.
- * 
+ *
  */
 class DatabaseTestCase extends PHPUnit_Framework_TestCase
 {
+
     /**
      * Setup the database and create the base tables for all tests
      */
@@ -39,12 +40,13 @@ class DatabaseTestCase extends PHPUnit_Framework_TestCase
             Piwik::createTables();
             Piwik::createLogObject();
 
-        Piwik_PluginsManager::getInstance()->loadPlugins(array());
+//            Piwik_PluginsManager::getInstance()->loadPlugins(array());
+            IntegrationTestCase::loadAllPlugins();
 
-        } catch(Exception $e) {
-            $this->fail("TEST INITIALIZATION FAILED: " .$e->getMessage());
+        } catch (Exception $e) {
+            $this->fail("TEST INITIALIZATION FAILED: " . $e->getMessage());
         }
-        
+
         include "DataFiles/SearchEngines.php";
         include "DataFiles/Languages.php";
         include "DataFiles/Countries.php";
@@ -58,13 +60,7 @@ class DatabaseTestCase extends PHPUnit_Framework_TestCase
     public function tearDown()
     {
         parent::tearDown();
-        try {
-            $plugins = Piwik_PluginsManager::getInstance()->getLoadedPlugins();
-            foreach($plugins AS $plugin) {
-                $plugin->uninstall();
-            }
-            Piwik_PluginsManager::getInstance()->unloadPlugins();
-        } catch (Exception $e) {}
+        IntegrationTestCase::unloadAllPlugins();
         Piwik::dropDatabase();
         Piwik_DataTable_Manager::getInstance()->deleteAll();
         Piwik_Option::getInstance()->clearCache();
@@ -72,7 +68,8 @@ class DatabaseTestCase extends PHPUnit_Framework_TestCase
         Piwik_Site::clearCache();
         Piwik_Tracker_Cache::deleteTrackerCache();
         Piwik_Config::getInstance()->clear();
-        Piwik_TablePartitioning::$tablesAlreadyInstalled = null;
+        Piwik_DataAccess_ArchiveTableCreator::clear();
         Zend_Registry::_unsetInstance();
     }
+
 }

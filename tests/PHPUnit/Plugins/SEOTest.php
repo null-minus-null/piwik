@@ -13,8 +13,8 @@ class SEOTest extends PHPUnit_Framework_TestCase
 
         // setup the access layer
         $pseudoMockAccess = new FakeAccess;
-        FakeAccess::setIdSitesView( array(1,2));
-        FakeAccess::setIdSitesAdmin( array(3,4));
+        FakeAccess::setIdSitesView(array(1, 2));
+        FakeAccess::setIdSitesAdmin(array(3, 4));
 
         //finally we set the user as a super user by default
         FakeAccess::$superUser = true;
@@ -38,12 +38,15 @@ class SEOTest extends PHPUnit_Framework_TestCase
      */
     public function test_API()
     {
-        $dataTable = Piwik_SEO_API::getInstance()->getRank('http://www.microsoft.com/');
+        try {
+            $dataTable = Piwik_SEO_API::getInstance()->getRank('http://www.microsoft.com/');
+        } catch(Exception $e) {
+            $this->markTestSkipped('A SEO http request failed, Skipping this test for now. Error was: '.$e->getMessage());
+        }
         $renderer = Piwik_DataTable_Renderer::factory('php');
         $renderer->setSerialize(false);
         $ranks = $renderer->render($dataTable);
-        foreach ($ranks as $rank)
-        {
+        foreach ($ranks as $rank) {
             $this->assertNotEmpty($rank['rank'], $rank['id'] . ' expected non-zero rank, got [' . $rank['rank'] . ']');
         }
     }

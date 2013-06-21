@@ -69,6 +69,8 @@ EXCLUDED_USER_AGENTS = (
     'bot/',
     'ccooter/',
     'crawl',
+    'curl',
+    'echoping',
     'exabot',
     'feed',
     'googlebot',
@@ -78,6 +80,7 @@ EXCLUDED_USER_AGENTS = (
     'mediapartners-google',
     'msnbot',
     'netcraftsurvey',
+    'panopta',
     'robot',
     'spider',
     'surveybot',
@@ -105,17 +108,23 @@ class RegexFormat(object):
 
     def __init__(self, name, regex, date_format='%d/%b/%Y:%H:%M:%S'):
         self.name = name
-        self.regex = re.compile(regex)
+        if regex is not None:
+            self.regex = re.compile(regex)
         self.date_format = date_format
 
     def check_format(self, file):
         line = file.readline()
         file.seek(0)
-        if re.match(self.regex, line):
-            return self
+        return self.check_format_line(line)
+    
+    def check_format_line(self, line):
+        return re.match(self.regex, line)
 
 
-class IisFormat(object):
+class IisFormat(RegexFormat):
+
+    def __init__(self):
+        super(IisFormat, self).__init__('iis', None, '%Y-%m-%d %H:%M:%S')
 
     def check_format(self, file):
         line = file.readline()
@@ -148,7 +157,12 @@ class IisFormat(object):
             except KeyError:
                 regex = '\S+'
             full_regex.append(regex)
-        return RegexFormat('iis', ' '.join(full_regex), '%Y-%m-%d %H:%M:%S')
+        self.regex = re.compile(' '.join(full_regex))
+        
+        start_pos = file.tell()
+        nextline = file.readline()
+        file.seek(start_pos)
+        return self.check_format_line(nextline)
 
 
 
@@ -160,6 +174,14 @@ _COMMON_LOG_FORMAT = (
 _NCSA_EXTENDED_LOG_FORMAT = (_COMMON_LOG_FORMAT +
     ' "(?P<referrer>.*?)" "(?P<user_agent>.*?)"'
 )
+_S3_LOG_FORMAT = (
+    '\S+ (?P<host>\S+) \[(?P<date>.*?) (?P<timezone>.*?)\] (?P<ip>\S+) '
+    '\S+ \S+ \S+ \S+ "\S+ (?P<path>.*?) \S+" (?P<status>\S+) \S+ (?P<length>\S+) '
+    '\S+ \S+ \S+ "(?P<referrer>.*?)" "(?P<user_agent>.*?)"'
+)
+_ICECAST2_LOG_FORMAT = ( _NCSA_EXTENDED_LOG_FORMAT +
+    ' (?P<session_time>\S+)'
+)
 
 FORMATS = {
     'common': RegexFormat('common', _COMMON_LOG_FORMAT),
@@ -167,6 +189,8 @@ FORMATS = {
     'ncsa_extended': RegexFormat('ncsa_extended', _NCSA_EXTENDED_LOG_FORMAT),
     'common_complete': RegexFormat('common_complete', _HOST_PREFIX + _NCSA_EXTENDED_LOG_FORMAT),
     'iis': IisFormat(),
+    's3': RegexFormat('s3', _S3_LOG_FORMAT),
+    'icecast2': RegexFormat('icecast2', _ICECAST2_LOG_FORMAT),
 }
 
 
@@ -378,6 +402,11 @@ class Configuration(object):
             '--invalidate-dates', dest='invalidate_dates', default=None,
             help="Invalidate reports for the specified dates (format: YYYY-MM-DD,YYYY-MM-DD,...). "
                  "By default, all dates found in the logs will be invalidated.",
+        )
+        option_parser.add_option(
+            '--force-lowercase-path', dest='force_lowercase_path', default=False, action='store_true',
+            help="Make URL path lowercase so paths with the same letters but different cases are "
+                 "treated the same."
         )
         return option_parser
 
@@ -873,6 +902,9 @@ class DynamicResolver(object):
 
     def __init__(self):
         self._cache = {}
+        if config.options.replay_tracking:
+            # get existing sites
+            self._cache['sites'] = piwik.call_api('SitesManager.getAllSites')
 
     def _get_site_id_from_hit_host(self, hit):
         main_url = 'http://' + hit.host
@@ -933,9 +965,21 @@ class DynamicResolver(object):
             stats.piwik_sites.add(site_id)
         return site_id
 
-    def resolve(self, hit):
+    def _resolve_when_replay_tracking(self, hit):
         """
-        Return the site ID from the cache if found, otherwise call _resolve.
+        If parsed site ID found in the _cache['sites'] return site ID and main_url,
+        otherwise return (None, None) tuple.
+        """
+        site_id = hit.args['idsite']
+        if site_id in self._cache['sites']:
+            stats.piwik_sites.add(site_id)
+            return (site_id, self._cache['sites'][site_id]['main_url'])
+        else:
+            return (None, None)
+    
+    def _resolve_by_host(self, hit):
+        """
+        Returns the site ID and site URL for a hit based on the hostname.
         """
         try:
             site_id = self._cache[hit.host]
@@ -948,9 +992,22 @@ class DynamicResolver(object):
             self._cache[hit.host] = site_id
         return (site_id, 'http://' + hit.host)
 
+    def resolve(self, hit):
+        """
+        Return the site ID from the cache if found, otherwise call _resolve.
+        If replay_tracking option is enabled, call _resolve_when_replay_tracking.
+        """
+        if config.options.replay_tracking:
+            # We only consider requests with piwik.php which don't need host to be imported
+            return self._resolve_when_replay_tracking(hit)
+        else:
+            return self._resolve_by_host(hit)
+
 
     def check_format(self, format):
-        if 'host' not in format.regex.groupindex and not config.options.log_hostname:
+        if config.options.replay_tracking:
+            pass
+        elif 'host' not in format.regex.groupindex and not config.options.log_hostname:
             fatal_error(
                 "the selected log format doesn't include the hostname: you must "
                 "specify the Piwik site ID with the --idsite argument"
@@ -1062,7 +1119,10 @@ class Recorder(object):
         site_id, main_url = resolver.resolve(hit)
         if site_id is None:
             # This hit doesn't match any known Piwik site.
-            stats.piwik_sites_ignored.add(hit.host)
+            if config.options.replay_tracking:
+                stats.piwik_sites_ignored.add('unrecognized site ID %s' % hit.args.get('idsite'))
+            else:
+                stats.piwik_sites_ignored.add(hit.host)
             stats.count_lines_no_site.increment()
             return
 
@@ -1071,11 +1131,14 @@ class Recorder(object):
         path = hit.path
         if hit.query_string and not config.options.strip_query_string:
             path += config.options.query_string_delimiter + hit.query_string
+        
+        # only prepend main url if it's a path
+        url = (main_url if path.startswith('/') else '') + path[:1024]
 
         args = {
             'rec': '1',
             'apiv': '1',
-            'url': (main_url + path[:1024]).encode('utf8'),
+            'url': url.encode('utf8'),
             'urlref': hit.referrer[:1024].encode('utf8'),
             'cip': hit.ip,
             'cdt': self.date_to_piwik(hit.date),
@@ -1083,6 +1146,9 @@ class Recorder(object):
             'dp': '0' if config.options.reverse_dns else '1',
             'ua': hit.user_agent.encode('utf8'),
         }
+        if config.options.replay_tracking:
+            # prevent request to be force recorded when option replay-tracking
+            args['rec'] = '0'
         args.update(hit.args)
 
         if hit.is_download:
@@ -1093,12 +1159,14 @@ class Recorder(object):
             args['_cvar'] = '{"1":["Not-Bot","%s"]}' % hit.user_agent
             args['bots'] = '1'
         if hit.is_error or hit.is_redirect:
-            args['_cvar'] = '{"2":["HTTP-code","%s"]}' % hit.status
+            args['cvar'] = '{"1":["HTTP-code","%s"]}' % hit.status
             args['action_name'] = '%s/URL = %s%s' % (
                 hit.status,
                 urllib.quote(args['url'], ''),
                 ("/From = %s" % urllib.quote(args['urlref'], '') if args['urlref'] != ''  else '')
             )
+        if hit.generation_time_milli > 0:
+            args['gt_ms'] = hit.generation_time_milli
         return args
 
     def _record_hits(self, hits):
@@ -1169,6 +1237,9 @@ class Hit(object):
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
         super(Hit, self).__init__()
+        
+        if config.options.force_lowercase_path:
+            self.full_path = self.full_path.lower()
 
 
 class Parser(object):
@@ -1259,16 +1330,27 @@ class Parser(object):
     @staticmethod
     def detect_format(file):
         """
-        Return the format matching this file, or None if none was found.
+        Return the best matching format for this file, or None if none was found.
         """
         logging.debug('Detecting the log format')
+        
+        format = None
+        format_groups = 0
         for name, candidate_format in FORMATS.iteritems():
-            format = candidate_format.check_format(file)
-            if format:
+            match = candidate_format.check_format(file)
+            if match:
                 logging.debug('Format %s matches', name)
-                return format
+                
+                # if there's more info in this match, use this format
+                match_groups = len(match.groups())
+                if format_groups < match_groups:
+                    format = candidate_format
+                    format_groups = match_groups
             else:
                 logging.debug('Format %s does not match', name)
+        
+        logging.debug('Format %s is the best match', format.name)
+        return format
 
     def parse(self, filename):
         """
@@ -1371,6 +1453,14 @@ class Parser(object):
                 # Some lines or formats don't have a length (e.g. 304 redirects, IIS logs)
                 hit.length = 0
 
+            try:
+                hit.generation_time_milli = int(match.group('generation_time_milli'))
+            except IndexError:
+                try:
+                    hit.generation_time_milli = int(match.group('generation_time_micro')) / 1000
+                except IndexError:
+                    hit.generation_time_milli = 0
+
             if config.options.log_hostname:
                 hit.host = config.options.log_hostname
             else:
@@ -1405,6 +1495,21 @@ class Parser(object):
 
             if timezone:
                 hit.date -= datetime.timedelta(hours=timezone/100)
+            if config.options.replay_tracking:
+                # we need a query string and we only consider requests with piwik.php
+                if not hit.query_string or not hit.path.lower().endswith('piwik.php'):
+                    continue
+
+                query_arguments = urlparse.parse_qs(hit.query_string)
+                if not "idsite" in query_arguments:
+                    invalid_line(line, 'missing idsite')
+                    continue
+
+                try:
+                    hit.args.update((k, v.pop().encode('raw_unicode_escape').decode(config.options.encoding)) for k, v in query_arguments.iteritems())
+                except UnicodeDecodeError:
+                    invalid_line(line, 'invalid encoding')
+                    continue
 
             # Check if the hit must be excluded.
             if all((method(hit) for method in self.check_methods)):
@@ -1414,16 +1519,6 @@ class Parser(object):
                     Recorder.add_hits(hits)
                     hits = []
 
-            if config.options.replay_tracking:
-                # we need a query string and we only consider requests with piwik.php
-                if hit.query_string and hit.path.lower().endswith('piwik.php'):
-                    query_arguments = urlparse.parse_qs(hit.query_string)
-                    if "idsite" in query_arguments:
-                        try:
-                            hit.args.update((k, v.pop().encode('raw_unicode_escape').decode(config.options.encoding)) for k, v in query_arguments.iteritems())
-                        except UnicodeDecodeError:
-                            invalid_line(line, 'invalid encoding')
-                            continue
         # add last chunk of hits
         if len(hits) > 0:
             Recorder.add_hits(hits)

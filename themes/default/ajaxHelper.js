@@ -56,7 +56,7 @@ function ajaxHelper() {
     this.format =         'json';
 
     /**
-     * Should ajax request be synchronous
+     * Should ajax request be asynchronous
      * @type {Boolean}
      */
     this.async =          true;
@@ -65,6 +65,12 @@ function ajaxHelper() {
      * Callback function to be executed on success
      */
     this.callback =       function () {};
+
+    /**
+     * Use this.callback if an error is returned
+     * @type {Boolean}
+     */
+    this.useRegularCallbackInCaseOfError = false;
 
     /**
      * Callback function to be executed on error
@@ -112,40 +118,31 @@ function ajaxHelper() {
      * @return {void}
      */
     this.addParams = function (params, type) {
-        switch (type.toLowerCase()) {
-
-            case 'get':
-                for (var key in params) {
-                    this.getParams[key] = params[key];
-                }
-                break;
-            case 'post':
-                for (var key in params) {
-                    this.postParams[key] = params[key];
-                }
-                break;
+        for (var key in params) {
+            if(type.toLowerCase() == 'get') {
+                this.getParams[key] = params[key];
+            } else if(type.toLowerCase() == 'post') {
+                this.postParams[key] = params[key];
+            }
         }
     };
     
     /**
      * Gets this helper instance ready to send a bulk request. Each argument to this
      * function is a single request to use.
-     * 
-     * @param {object} ... The requests to send simultaneously.
      */
     this.setBulkRequests = function () {
-    	var urls = [];
-    	for (var i = 0; i != arguments.length; ++i)
-    	{
-    		urls.push($.param(arguments[i]));
-    	}
-    	
-    	this.addParams({
-    		module: 'API',
-    		method: 'API.getBulkRequest',
-    		urls: urls,
-    		format: 'json'
-    	}, 'post');
+        var urls = [];
+        for (var i = 0; i != arguments.length; ++i) {
+            urls.push($.param(arguments[i]));
+        }
+
+        this.addParams({
+            module: 'API',
+            method: 'API.getBulkRequest',
+            urls: urls,
+            format: 'json'
+        }, 'post');
     };
 
     /**
@@ -154,9 +151,16 @@ function ajaxHelper() {
      * @param {function} callback  Callback function
      * @return {void}
      */
-
     this.setCallback = function (callback) {
         this.callback = callback;
+    };
+
+    /**
+     * Set that the callback passed to setCallback() should be used if an application error (i.e. an
+     * Exception in PHP) is returned.
+     */
+    this.useCallbackInCaseOfError = function () {
+        this.useRegularCallbackInCaseOfError = true;
     };
 
     /**
@@ -175,12 +179,9 @@ function ajaxHelper() {
             var urlToRedirect = piwikHelper.getCurrentQueryStringWithParametersModified(params);
             var updatedUrl = new RegExp('&updated=([0-9]+)');
             var updatedCounter = updatedUrl.exec(urlToRedirect);
-            if(!updatedCounter)
-            {
+            if (!updatedCounter) {
                 urlToRedirect += '&updated=1';
-            }
-            else
-            {
+            } else {
                 updatedCounter = 1 + parseInt(updatedCounter[1]);
                 urlToRedirect = urlToRedirect.replace(new RegExp('(&updated=[0-9]+)'), '&updated=' + updatedCounter);
             }
@@ -296,10 +297,24 @@ function ajaxHelper() {
     this._buildAjaxCall = function () {
         var that = this;
 
+        var parameters = this._mixinDefaultGetParams(this.getParams);
+
+        var url = 'index.php?';
+
+        // we took care of encoding &segment properly already, so we don't use $.param for it ($.param URL encodes the values)
+        if(parameters['segment']) {
+            url += 'segment=' + parameters['segment'] + '&';
+            delete parameters['segment'];
+        }
+        if(parameters['date']) {
+            url += 'date=' + decodeURIComponent(parameters['date']) + '&';
+            delete parameters['date'];
+        }
+        url += $.param(parameters);
         var ajaxCall = {
             type:     'POST',
             async:    this.async !== false,
-            url:      'index.php?' + $.param(this._mixinDefaultGetParams(this.getParams)),
+            url:      url,
             dataType: this.format || 'json',
             error:    this.errorCallback,
             success:  function (response) {
@@ -307,7 +322,7 @@ function ajaxHelper() {
                     $(that.loadingElement).hide();
                 }
 
-                if (response && response.result == 'error') {
+                if (response && response.result == 'error' && !that.useRegularCallbackInCaseOfError) {
                     if ($(that.errorElement).length && response.message) {
                         $(that.errorElement).html(response.message).fadeIn();
                         piwikHelper.lazyScrollTo(that.errorElement, 250);
@@ -359,7 +374,7 @@ function ajaxHelper() {
         var defaultParams = {
             idSite:  piwik.idSite || broadcast.getValueFromUrl('idSite'),
             period:  piwik.period || broadcast.getValueFromUrl('period'),
-            segment: broadcast.getValueFromHash('segment', window.location.href)
+            segment: broadcast.getValueFromHash('segment', window.location.href.split('#')[1])
         };
 
         // never append token_auth to url
@@ -369,13 +384,13 @@ function ajaxHelper() {
         }
 
         for (var key in defaultParams) {
-            if (!params[key] && defaultParams[key]) {
+            if (!params[key] && !this.postParams[key] && defaultParams[key]) {
                 params[key] = defaultParams[key];
             }
         }
 
         // handle default date & period if not already set
-        if (!params.date) {
+        if (!params.date && !this.postParams.date) {
             params.date = piwik.currentDateString || broadcast.getValueFromUrl('date');
             if (params.period == 'range' && piwik.currentDateString) {
                 params.date = piwik.startDateString + ',' + params.date;

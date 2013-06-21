@@ -12,64 +12,11 @@
  */
 class Test_Piwik_Integration_OneVisitorOneWebsite_SeveralDaysDateRange_ArchivingTests extends IntegrationTestCase
 {
-    protected static $dateTimes = array(
-        '2010-12-14 01:00:00',
-        '2010-12-15 01:00:00',
-        '2010-12-25 01:00:00',
-        '2011-01-15 01:00:00',
-        '2011-01-16 01:00:00',
-    );
-    protected static $idSite = 1;
-
-    public static function setUpBeforeClass()
-    {
-        parent::setUpBeforeClass();
-        try {
-            self::setUpWebsitesAndGoals();
-            self::trackVisits();
-        } catch(Exception $e) {
-            // Skip whole test suite if an error occurs while setup
-            throw new PHPUnit_Framework_SkippedTestSuiteError($e->getMessage());
-        }
-    }
+    public static $fixture = null; // initialized below test definition
 
     public function getOutputPrefix()
     {
         return 'oneVisitor_oneWebsite_severalDays_DateRange';
-    }
-
-    protected static function setUpWebsitesAndGoals()
-    {
-        self::createWebsite(self::$dateTimes[0]);
-    }
-
-    protected static function trackVisits()
-    {
-        $dateTimes = self::$dateTimes;
-        $idSite    = self::$idSite;
-
-        $i = 0;
-        foreach ($dateTimes as $dateTime) {
-            $i++;
-            $visitor = self::getTracker($idSite, $dateTime, $defaultInit = true);
-            // Fake the visit count cookie
-            $visitor->setDebugStringAppend("&_idvc=$i");
-
-            $visitor->setForceVisitDateTime(Piwik_Date::factory($dateTime)->addHour(0.1)->getDatetime());
-            $visitor->setUrl('http://example.org/homepage');
-            self::checkResponse($visitor->doTrackPageView('ou pas'));
-
-            // Test change the IP, the visit should not be split but recorded to the same idvisitor
-            $visitor->setIp('200.1.15.22');
-
-            $visitor->setForceVisitDateTime(Piwik_Date::factory($dateTime)->addHour(0.2)->getDatetime());
-            $visitor->setUrl('http://example.org/news');
-            self::checkResponse($visitor->doTrackPageView('ou pas'));
-
-            $visitor->setForceVisitDateTime(Piwik_Date::factory($dateTime)->addHour(1)->getDatetime());
-            $visitor->setUrl('http://example.org/news');
-            self::checkResponse($visitor->doTrackPageView('ou pas'));
-        }
     }
 
     /**
@@ -84,16 +31,18 @@ class Test_Piwik_Integration_OneVisitorOneWebsite_SeveralDaysDateRange_Archiving
 
     public function getApiForTesting()
     {
+        $idSite = self::$fixture->idSite;
+
         $apiToCall = array('Actions.getPageUrls',
-            'VisitsSummary.get',
-            'UserSettings.getResolution',
-            'VisitFrequency.get',
-            'VisitTime.getVisitInformationPerServerTime');
+                           'VisitsSummary.get',
+                           'UserSettings.getResolution',
+                           'VisitFrequency.get',
+                           'VisitTime.getVisitInformationPerServerTime');
 
         // 2 segments: ALL and another way of expressing ALL but triggering the Segment code path
         $segments = array(
             false,
-            'country!=aa',
+            'countryCode!=aa',
             'pageUrl!=ThisIsNotKnownPageUrl',
         );
 
@@ -101,7 +50,7 @@ class Test_Piwik_Integration_OneVisitorOneWebsite_SeveralDaysDateRange_Archiving
         $result = array();
         for ($i = 0; $i <= 1; $i++) {
             foreach ($segments as $segment) {
-                $result[] = array($apiToCall, array('idSite'  => self::$idSite, 'date' => '2010-12-15,2011-01-15',
+                $result[] = array($apiToCall, array('idSite'  => $idSite, 'date' => '2010-12-15,2011-01-15',
                                                     'periods' => array('range'), 'segment' => $segment));
             }
         }
@@ -121,29 +70,45 @@ class Test_Piwik_Integration_OneVisitorOneWebsite_SeveralDaysDateRange_Archiving
         $tests = array(
             // 5 blobs for the Actions plugin, 7 blobs for UserSettings, 2 blobs VisitTime
             'archive_blob_2010_12'    => (5 + 8 + 2) * 3,
-            // (VisitsSummary 5 metrics + 1 flag - no Unique visitors for range)
-            // + 1 flag archive UserSettings
-            // + (Actions 1 flag + 2 metrics - pageviews, unique pageviews + X??? metrics Site Search)
-            // + (Frequency 5 metrics + 1 flag)
-            // + 1 flag VisitTime
-            // * 3 segments
-            'archive_numeric_2010_12' => (6 + 1 + 3 + 6 + 1) * 3,
+
+            /**
+             *  In Each "Period=range" Archive, we expect following non zero numeric entries:
+             *                 5 metrics + 1 flag  //VisitsSummary
+             *               + 2 metrics + 1 flag //Actions
+             *               + 1 flag // UserSettings
+             *               + 1 flag //VisitTime
+             *               = 11
+             *
+             *   because we call VisitFrequency.get, this creates an archive for the visitorType==returning segment.
+             *          -> There are two archives for each segment (one for "countryCode!=aa"
+             *                      and VisitFrequency creates one for "countryCode!=aa;visitorType==returning")
+             *
+             * So each period=range will have = 11 records + (5 metrics + 1flag // VisitsSummary)
+             *                                = 17
+             *
+             * Total expected records = count unique archives * records per archive
+             *                        = 3 * 17
+             *                        = 51
+             */
+            'archive_numeric_2010_12' => 17 * 3,
 
             // all "Range" records are in December
             'archive_blob_2011_01'    => 0,
             'archive_numeric_2011_01' => 0,
         );
         foreach ($tests as $table => $expectedRows) {
-            $sql        = "SELECT count(*) FROM " . Piwik_Common::prefixTable($table) . " WHERE period = " . Piwik::$idPeriods['range'];
+            $sql = "SELECT count(*) FROM " . Piwik_Common::prefixTable($table) . " WHERE period = " . Piwik::$idPeriods['range'];
             $countBlobs = Zend_Registry::get('db')->fetchOne($sql);
 
-	        // Uncomment to display a more verbose content of the table, when this test fails
-//	        if( $expectedRows!= $countBlobs) {
-//		        $var = Zend_Registry::get('db')->fetchAll("SELECT * FROM " . Piwik_Common::prefixTable($table) . " WHERE period = " . Piwik::$idPeriods['range']);
-//		        Piwik::log($var); die('t');
-//	        }
-	        $this->assertEquals($expectedRows, $countBlobs, "$table expected $expectedRows, got $countBlobs");
+            if($expectedRows != $countBlobs) {
+                var_export(Zend_Registry::get('db')->fetchAll("SELECT * FROM " . Piwik_Common::prefixTable($table). " WHERE period = " . Piwik::$idPeriods['range'] . " ORDER BY idarchive ASC"));
+            }
+            $this->assertEquals($expectedRows, $countBlobs, "$table expected $expectedRows, got $countBlobs");
         }
     }
 
 }
+
+Test_Piwik_Integration_OneVisitorOneWebsite_SeveralDaysDateRange_ArchivingTests::$fixture
+    = new Test_Piwik_Fixture_VisitsOverSeveralDays();
+

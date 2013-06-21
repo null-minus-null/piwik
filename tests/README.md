@@ -25,10 +25,15 @@ Integration tests allow to test how major Piwik components interact together.
 A test will typically generate hits to the Tracker (record visits and page views)
 and then test all API responses and for each API output. It then checks that they match expected XML (or CSV, json, etc.).
 If a test fails, you can compare the processed/ and expected/ directories in a graphical 
-text compare tool, such as WinMerge on Win, to easily view changes between files.
+text compare tool, such as WinMerge on Win, or MELD on Linux, to easily view changes between files.
+
+For example using Meld, click on "Start new comparison", "Directory comparison",
+in "Original" select "path/to/piwik/tests/PHPUnit/Integration/expected"
+in "Mine" select "path/to/piwik/tests/PHPUnit/Integration/processed"
+
 If changes are expected due to the code changes you make, simply copy the file from processed/ to 
-expected/, and test will then pass. Otherwise, if you didn't expect to modify the API outputs, 
-it might be that your changes are breaking some features unexpectedly.
+expected/, and test will then pass. Copying files is done easily using Meld (ALT+LEFT).
+Otherwise, if you didn't expect to modify the API outputs, it might be that your changes are breaking some features unexpectedly.
 
 ## PHPUnit Tests
 
@@ -43,17 +48,19 @@ it might be that your changes are breaking some features unexpectedly.
 
 2. 	Configure PHPUnit: Copy the file `piwik/tests/PHPUnit/phpunit.xml.dist` to `phpunit.xml`.
 	In this file, you will find the following lines.
-	Please edit HTTP_HOST and REQUEST_URI to match the hostname and path of the Piwik files:
+	Please edit HTTP_HOST and REQUEST_URI to match the hostname and path of the Piwik files.
+    For example if your Piwik is available at http://localhost/path/to/piwik/ you would write:
 
 		<server name="HTTP_HOST" value="localhost"/>
-		<server name="REQUEST_URI" value="/path/to/piwik/tests/all_tests.php"/>
-	
+		<server name="REQUEST_URI" value="/path/to/piwik/"/>
+
+
 3. 	Run the tests (see the next section to run tests in the browser)
 
 		$ cd /path/to/piwik/tests/PHPUnit
 		$ phpunit
 
-	This will run all unit + integration tests. It might take 30 minutes to run.
+	This will run all unit + integration tests. It might take 10-20 minutes to run.
 
 	You can also run tests of specified "parts" of Piwik.
 	There are three main groups of tests: Core, Plugins and Integration
@@ -124,7 +131,7 @@ work altered the expected images. The standard procedure described in the INTEGR
  - set up the vagrant piwik vm (which is used by the integration server) or
  - retrieve the files from the integration server.
 
-## Continous Integration
+## Continuous Integration
 
 We run a Jenkins server for continuous integration. It automatically downloads the latest version of the Piwik code
 from our GIT repo and runs a battery of thousands of tests. More information at the links:
@@ -139,7 +146,7 @@ which you can use to run PHPUnit tests in your browser.
 
 ### Starting VisualPHPUnit
 
-To load VisualPHPUnit point your browser to http://path/to/piwik/trunk/tests/lib/visualphpunit/.
+To load VisualPHPUnit point your browser to http://path/to/piwik/tests/lib/visualphpunit/.
 
 VisualPHPUnit will already be configured for use with Piwik. 
 
@@ -213,10 +220,11 @@ First, XHProf must be built (this guide assumes you're using a linux variant):
 
  * 	Navigate to the XHProf extension directory.
 
-		$ cd /path/to/piwik/trunk/tests/lib/xhprof-0.9.2/extension
+		$ cd /path/to/piwik/tests/lib/xhprof-0.9.2/extension
     
  * 	Build XHProf.
 
+		$ phpize
 		$ ./configure
 		$ make
     
@@ -226,7 +234,7 @@ First, XHProf must be built (this guide assumes you're using a linux variant):
       
 	```
 	[xhprof]
-	extension=/path/to/piwik/trunk/tests/lib/xhprof-0.9.2/extension/modules/xhprof.so
+	extension=/path/to/piwik/tests/lib/xhprof-0.9.2/extension/modules/xhprof.so
 	xhprof.output_dir=/path/to/output/dir
 	```
       
@@ -240,7 +248,7 @@ is installed and act accordingly.
 
 To use XHProf, first load VisualPHPUnit by pointing your browser to:
 
-http://path/to/piwik/trunk/tests/lib/visualphpunit/
+http://path/to/piwik/tests/lib/visualphpunit/
 
 Select a test or get ready to run a benchmark. Make sure the 'Profile with XHProf' select
 box is set to 'Yes' and click 'Run Tests'.
