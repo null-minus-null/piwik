@@ -8,33 +8,39 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\ViewDataTable;
+
+use Exception;
+use Piwik\Common;
+use Piwik\DataTable;
+use Piwik\ViewDataTable;
 
 /**
  * Reads the requested DataTable from the API and prepare data for the Sparkline view.
  *
  * @package Piwik
- * @subpackage Piwik_ViewDataTable
+ * @subpackage ViewDataTable
  */
-class Piwik_ViewDataTable_Sparkline extends Piwik_ViewDataTable
+class Sparkline extends ViewDataTable
 {
-    protected function getViewDataTableId()
+    /**
+     * Returns dataTable id for view
+     *
+     * @return string
+     */
+    public function getViewDataTableId()
     {
         return 'sparkline';
     }
 
     /**
-     * @see Piwik_ViewDataTable::main()
+     * @see ViewDataTable::main()
      * @return mixed
      */
-    public function main()
+    protected function buildView()
     {
-        if ($this->mainAlreadyExecuted) {
-            return;
-        }
-        $this->mainAlreadyExecuted = true;
-
         // If period=range, we force the sparkline to draw daily data points
-        $period = Piwik_Common::getRequestVar('period');
+        $period = Common::getRequestVar('period');
         if ($period == 'range') {
             $_GET['period'] = 'day';
         }
@@ -43,35 +49,40 @@ class Piwik_ViewDataTable_Sparkline extends Piwik_ViewDataTable
         $_GET['period'] = $period;
 
         $values = $this->getValuesFromDataTable($this->dataTable);
-        $this->isDataAvailable = true;
         if (empty($values)) {
             $values = array_fill(0, 30, 0);
-            $this->isDataAvailable = false;
         }
 
-        $graph = new Piwik_Visualization_Sparkline();
+        $graph = new \Piwik\Visualization\Sparkline();
         $graph->setValues($values);
 
-        $height = Piwik_Common::getRequestVar('height', 0, 'int');
+        $height = Common::getRequestVar('height', 0, 'int');
         if (!empty($height)) {
             $graph->setHeight($height);
         }
 
-        $width = Piwik_Common::getRequestVar('width', 0, 'int');
+        $width = Common::getRequestVar('width', 0, 'int');
         if (!empty($width)) {
             $graph->setWidth($width);
         }
 
         $graph->main();
 
-        $this->view = $graph;
+        return $graph;
     }
 
-    protected function getValuesFromDataTableArray($dataTableArray, $columnToPlot)
+    /**
+     * @param DataTable\Map $dataTableMap
+     * @param string $columnToPlot
+     *
+     * @return array
+     * @throws \Exception
+     */
+    protected function getValuesFromDataTableMap($dataTableMap, $columnToPlot)
     {
-        $dataTableArray->applyQueuedFilters();
+        $dataTableMap->applyQueuedFilters();
         $values = array();
-        foreach ($dataTableArray->getArray() as $table) {
+        foreach ($dataTableMap->getDataTables() as $table) {
             if ($table->getRowsCount() > 1) {
                 throw new Exception("Expecting only one row per DataTable");
             }
@@ -94,17 +105,20 @@ class Piwik_ViewDataTable_Sparkline extends Piwik_ViewDataTable
 
     protected function getValuesFromDataTable($dataTable)
     {
-        $columns = $this->getColumnsToDisplay();
+        $columns = $this->vizConfig->columns_to_display;
         $columnToPlot = false;
         if (!empty($columns)) {
-            $columnToPlot = $columns[0];
+            $columnToPlot = reset($columns);
+            if ($columnToPlot == 'label') {
+                $columnToPlot = next($columns);
+            }
         }
         $values = false;
-        // a Piwik_DataTable_Array is returned when using the normal code path to request data from Archives, in all core plugins
+        // a Set is returned when using the normal code path to request data from Archives, in all core plugins
         // however plugins can also return simple datatable, hence why the sparkline can accept both data types
-        if ($this->dataTable instanceof Piwik_DataTable_Array) {
-            $values = $this->getValuesFromDataTableArray($dataTable, $columnToPlot);
-        } elseif ($this->dataTable instanceof Piwik_DataTable) {
+        if ($this->dataTable instanceof DataTable\Map) {
+            $values = $this->getValuesFromDataTableMap($dataTable, $columnToPlot);
+        } elseif ($this->dataTable instanceof DataTable) {
             $values = $this->dataTable->getColumn($columnToPlot);
         }
         return $values;

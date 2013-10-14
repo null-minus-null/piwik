@@ -6,133 +6,123 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_Provider
+ * @package Provider
  */
+namespace Piwik\Plugins\Provider;
+
+use Exception;
+use Piwik\ArchiveProcessor;
+use Piwik\Common;
+use Piwik\Db;
+
+use Piwik\FrontController;
+use Piwik\IP;
+use Piwik\Menu\MenuMain;
+use Piwik\Piwik;
+use Piwik\WidgetsList;
 
 /**
  *
- * @package Piwik_Provider
+ * @package Provider
  */
-class Piwik_Provider extends Piwik_Plugin
+class Provider extends \Piwik\Plugin
 {
-    public function getInformation()
-    {
-        $info = array(
-            'description'     => Piwik_Translate('Provider_PluginDescription'),
-            'author'          => 'Piwik',
-            'author_homepage' => 'http://piwik.org/',
-            'version'         => Piwik_Version::VERSION,
-            'TrackerPlugin'   => true, // this plugin must be loaded during the stats logging
-        );
-
-        return $info;
-    }
-
+    /**
+     * @see Piwik_Plugin::getListHooksRegistered
+     */
     public function getListHooksRegistered()
     {
         $hooks = array(
-            'ArchiveProcessing_Day.compute'    => 'archiveDay',
-            'ArchiveProcessing_Period.compute' => 'archivePeriod',
-            'Tracker.newVisitorInformation'    => 'logProviderInfo',
-            'WidgetsList.add'                  => 'addWidget',
-            'Menu.add'                         => 'addMenu',
-            'API.getReportMetadata'            => 'getReportMetadata',
-            'API.getSegmentsMetadata'          => 'getSegmentsMetadata',
+            'ArchiveProcessor.Day.compute'             => 'archiveDay',
+            'ArchiveProcessor.Period.compute'          => 'archivePeriod',
+            'Tracker.newVisitorInformation'            => 'logProviderInfo',
+            'WidgetsList.addWidgets'                   => 'addWidget',
+            'Menu.Reporting.addItems'                  => 'addMenu',
+            'API.getReportMetadata'                    => 'getReportMetadata',
+            'API.getSegmentsMetadata'                  => 'getSegmentsMetadata',
+            'Visualization.getReportDisplayProperties' => 'getReportDisplayProperties',
         );
         return $hooks;
     }
 
-    /**
-     * @param Piwik_Event_Notification $notification  notification object
-     */
-    public function getReportMetadata($notification)
+    public function getReportMetadata(&$reports)
     {
-        $reports = & $notification->getNotificationObject();
         $reports[] = array(
-            'category'      => Piwik_Translate('General_Visitors'),
-            'name'          => Piwik_Translate('Provider_ColumnProvider'),
+            'category'      => Piwik::translate('General_Visitors'),
+            'name'          => Piwik::translate('Provider_ColumnProvider'),
             'module'        => 'Provider',
             'action'        => 'getProvider',
-            'dimension'     => Piwik_Translate('Provider_ColumnProvider'),
-            'documentation' => Piwik_Translate('Provider_ProviderReportDocumentation', '<br />'),
+            'dimension'     => Piwik::translate('Provider_ColumnProvider'),
+            'documentation' => Piwik::translate('Provider_ProviderReportDocumentation', '<br />'),
             'order'         => 50
         );
     }
 
-    /**
-     * @param Piwik_Event_Notification $notification  notification object
-     */
-    public function getSegmentsMetadata($notification)
+    public function getSegmentsMetadata(&$segments)
     {
-        $segments =& $notification->getNotificationObject();
         $segments[] = array(
             'type'           => 'dimension',
             'category'       => 'Visit Location',
-            'name'           => Piwik_Translate('Provider_ColumnProvider'),
+            'name'           => Piwik::translate('Provider_ColumnProvider'),
             'segment'        => 'provider',
             'acceptedValues' => 'comcast.net, proxad.net, etc.',
             'sqlSegment'     => 'log_visit.location_provider'
         );
     }
 
-    function install()
+    public function install()
     {
         // add column hostname / hostname ext in the visit table
-        $query = "ALTER IGNORE TABLE `" . Piwik_Common::prefixTable('log_visit') . "` ADD `location_provider` VARCHAR( 100 ) NULL";
+        $query = "ALTER IGNORE TABLE `" . Common::prefixTable('log_visit') . "` ADD `location_provider` VARCHAR( 100 ) NULL";
 
         // if the column already exist do not throw error. Could be installed twice...
         try {
-            Piwik_Exec($query);
+            Db::exec($query);
         } catch (Exception $e) {
-            if (!Zend_Registry::get('db')->isErrNo($e, '1060')) {
+            if (!Db::get()->isErrNo($e, '1060')) {
                 throw $e;
             }
         }
-
     }
 
-    function uninstall()
+    public function uninstall()
     {
         // add column hostname / hostname ext in the visit table
-        $query = "ALTER TABLE `" . Piwik_Common::prefixTable('log_visit') . "` DROP `location_provider`";
-        Piwik_Exec($query);
+        $query = "ALTER TABLE `" . Common::prefixTable('log_visit') . "` DROP `location_provider`";
+        Db::exec($query);
     }
 
-    function addWidget()
+    public function addWidget()
     {
-        Piwik_AddWidget('General_Visitors', 'Provider_WidgetProviders', 'Provider', 'getProvider');
+        WidgetsList::add('General_Visitors', 'Provider_WidgetProviders', 'Provider', 'getProvider');
     }
 
-    function addMenu()
+    public function addMenu()
     {
-        Piwik_RenameMenuEntry('General_Visitors', 'UserCountry_SubmenuLocations',
+        MenuMain::getInstance()->rename('General_Visitors', 'UserCountry_SubmenuLocations',
             'General_Visitors', 'Provider_SubmenuLocationsProvider');
     }
 
-    function postLoad()
+    public function postLoad()
     {
-        Piwik_AddAction('template_footerUserCountry', array('Piwik_Provider', 'footerUserCountry'));
+        Piwik::addAction('Template.footerUserCountry', array('Piwik\Plugins\Provider\Provider', 'footerUserCountry'));
     }
 
     /**
      * Logs the provider in the log_visit table
-     *
-     * @param Piwik_Event_Notification $notification  notification object
      */
-    public function logProviderInfo($notification)
+    public function logProviderInfo(&$visitorInfo)
     {
-        $visitorInfo =& $notification->getNotificationObject();
-
         // if provider info has already been set, abort
         if (!empty($visitorInfo['location_provider'])) {
             return;
         }
 
-        $ip = Piwik_IP::N2P($visitorInfo['location_ip']);
+        $ip = IP::N2P($visitorInfo['location_ip']);
 
         // In case the IP was anonymized, we should not continue since the DNS reverse lookup will fail and this will slow down tracking
         if (substr($ip, -2, 2) == '.0') {
-            printDebug("IP Was anonymized so we skip the Provider DNS reverse lookup...");
+            Common::printDebug("IP Was anonymized so we skip the Provider DNS reverse lookup...");
             return;
         }
 
@@ -148,7 +138,7 @@ class Piwik_Provider extends Piwik_Plugin
         if ($hostnameDomain == 'uk') {
             $hostnameDomain = 'gb';
         }
-        if (array_key_exists($hostnameDomain, Piwik_Common::getCountriesList())) {
+        if (array_key_exists($hostnameDomain, Common::getCountriesList())) {
             $visitorInfo['location_country'] = $hostnameDomain;
         }
     }
@@ -174,7 +164,23 @@ class Piwik_Provider extends Piwik_Plugin
             return 'Ip';
         } else {
             $cleanHostname = null;
-            Piwik_PostEvent('Provider.getCleanHostname', $cleanHostname, $hostname);
+
+            /**
+             * This event is triggered to get a clean hostname depending on a given hostname. For instance it is used
+             * to return `site.co.jp` in `fvae.VARG.ceaga.site.co.jp`. Use this event to customize the way a hostname
+             * is cleaned.
+             *
+             * Example:
+             * ```
+             * public function getCleanHostname(&$cleanHostname, $hostname)
+             * {
+             *     if ('fvae.VARG.ceaga.site.co.jp' == $hostname) {
+             *         $cleanHostname = 'site.co.jp';
+             *     }
+             * }
+             * ```
+             */
+            Piwik::postEvent('Provider.getCleanHostname', array(&$cleanHostname, $hostname));
             if ($cleanHostname !== null) {
                 return $cleanHostname;
             }
@@ -199,49 +205,46 @@ class Piwik_Provider extends Piwik_Plugin
      */
     private function getHost($ip)
     {
-        return trim(strtolower(@Piwik_IP::getHostByAddr($ip)));
+        return trim(strtolower(@IP::getHostByAddr($ip)));
     }
 
-    /**
-     * @param Piwik_Event_Notification $notification  notification object
-     */
-    static public function footerUserCountry($notification)
+    static public function footerUserCountry(&$out)
     {
-        $out =& $notification->getNotificationObject();
         $out = '<div>
-			<h2>' . Piwik_Translate('Provider_WidgetProviders') . '</h2>';
-        $out .= Piwik_FrontController::getInstance()->fetchDispatch('Provider', 'getProvider');
+			<h2>' . Piwik::translate('Provider_WidgetProviders') . '</h2>';
+        $out .= FrontController::getInstance()->fetchDispatch('Provider', 'getProvider');
         $out .= '</div>';
     }
 
     /**
      * Daily archive: processes the report Visits by Provider
-     *
-     * @param Piwik_Event_Notification $notification  notification object
      */
-    function archiveDay($notification)
+    public function archiveDay(ArchiveProcessor\Day $archiveProcessor)
     {
-        $archiveProcessor = $notification->getNotificationObject();
-
-        $archiving = new Piwik_Provider_Archiver($archiveProcessor);
-        if($archiving->shouldArchive()) {
+        $archiving = new Archiver($archiveProcessor);
+        if ($archiving->shouldArchive()) {
             $archiving->archiveDay();
         }
     }
 
-    /**
-     * @param Piwik_Event_Notification $notification  notification object
-     * @return mixed
-     */
-    function archivePeriod($notification)
+    public function archivePeriod(ArchiveProcessor\Period $archiveProcessor)
     {
-        $archiveProcessor = $notification->getNotificationObject();
-
-        $archiving = new Piwik_Provider_Archiver($archiveProcessor);
-        if($archiving->shouldArchive()) {
+        $archiving = new Archiver($archiveProcessor);
+        if ($archiving->shouldArchive()) {
             $archiving->archivePeriod();
         }
     }
 
+    public function getReportDisplayProperties(&$properties)
+    {
+        $properties['Provider.getProvider'] = $this->getDisplayPropertiesForGetProvider();
+    }
 
+    private function getDisplayPropertiesForGetProvider()
+    {
+        return array(
+            'translations' => array('label' => Piwik::translate('Provider_ColumnProvider')),
+            'filter_limit' => 5
+        );
+    }
 }

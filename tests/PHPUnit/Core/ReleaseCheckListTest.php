@@ -1,4 +1,8 @@
 <?php
+use Piwik\Filesystem;
+use Piwik\SettingsServer;
+use Piwik\Tracker\Db;
+
 /**
  * Piwik - Open source web analytics
  *
@@ -29,9 +33,8 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
         $this->_checkEqual(array('Tracker' => 'visit_standard_length'), '1800');
         $this->_checkEqual(array('Tracker' => 'trust_visitors_cookies'), '0');
         // logging messages are disabled
-        $this->_checkEqual(array('log' => 'logger_message'), '');
-        $this->_checkEqual(array('log' => 'logger_exception'), array('screen'));
-        $this->_checkEqual(array('log' => 'logger_error'), array('screen'));
+        $this->_checkEqual(array('log' => 'log_level'), 'WARN');
+        $this->_checkEqual(array('log' => 'log_writers'), array('file'));
         $this->_checkEqual(array('log' => 'logger_api_call'), null);
     }
 
@@ -52,8 +55,8 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
      */
     public function testTemplatesDontContainDebug()
     {
-        $patternFailIfFound = '{debug}';
-        $files = Piwik::globr(PIWIK_INCLUDE_PATH . '/plugins', '*.tpl');
+        $patternFailIfFound = 'dump(';
+        $files = Filesystem::globr(PIWIK_INCLUDE_PATH . '/plugins', '*.twig');
         foreach ($files as $file) {
             $content = file_get_contents($file);
             $this->assertFalse(strpos($content, $patternFailIfFound), 'found in ' . $file);
@@ -68,9 +71,7 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
     {
         $pluginsShouldBeDisabled = array(
             'AnonymizeIP',
-            'DBStats',
-            'SecurityInfo',
-            'VisitorGenerator',
+            'DBStats'
         );
         foreach ($pluginsShouldBeDisabled as $pluginName) {
             if (in_array($pluginName, $this->globalConfig['Plugins']['Plugins'])) {
@@ -88,7 +89,7 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
     public function testProfilingDisabledInProduction()
     {
         require_once 'Tracker/Db.php';
-        $this->assertTrue(Piwik_Tracker_Db::isProfilingEnabled() === false, 'SQL profiler should be disabled in production! See Piwik_Tracker_Db::$profiling');
+        $this->assertTrue(Db::isProfilingEnabled() === false, 'SQL profiler should be disabled in production! See Db::$profiling');
     }
 
     /**
@@ -116,32 +117,13 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
      * @group Core
      * @group ReleaseCheckList
      */
-    public function testAjaxLibraryVersions()
-    {
-        Piwik::createConfigObject();
-        Piwik_Config::getInstance()->setTestEnvironment();
-
-        $jqueryJs = file_get_contents(PIWIK_DOCUMENT_ROOT . '/libs/jquery/jquery.js', false, NULL, 0, 512);
-        $this->assertTrue((boolean)preg_match('/jQuery (?:JavaScript Library )?v?([0-9.]+)/', $jqueryJs, $matches));
-        $this->assertEquals(Piwik_Config::getInstance()->General['jquery_version'], $matches[1]);
-
-        $jqueryuiJs = file_get_contents(PIWIK_DOCUMENT_ROOT . '/libs/jquery/jquery-ui.js', false, NULL, 0, 512);
-        $this->assertTrue((boolean)preg_match('/jQuery UI (?:- v)?([0-9.]+)/', $jqueryuiJs, $matches));
-        $this->assertEquals(Piwik_Config::getInstance()->General['jqueryui_version'], $matches[1]);
-
-    }
-
-    /**
-     * @group Core
-     * @group ReleaseCheckList
-     */
     public function testEndOfLines()
     {
-        if (Piwik_Common::isWindows()) {
+        if (SettingsServer::isWindows()) {
             // SVN native does not make this work on windows
             return;
         }
-        foreach (Piwik::globr(PIWIK_DOCUMENT_ROOT, '*') as $file) {
+        foreach (Filesystem::globr(PIWIK_DOCUMENT_ROOT, '*') as $file) {
             // skip files in these folders
             if (strpos($file, '/.git/') !== false ||
                 strpos($file, '/documentation/') !== false ||
@@ -154,7 +136,7 @@ class ReleaseCheckListTest extends PHPUnit_Framework_TestCase
             }
 
             // skip files with these file extensions
-            if (preg_match('/\.(bmp|fdf|gif|deflate|gz|ico|jar|jpg|p12|pdf|png|rar|swf|vsd|z|zip|ttf|so|dat|eps|phar)$/', $file)) {
+            if (preg_match('/\.(bmp|fdf|gif|deflate|exe|gz|ico|jar|jpg|p12|pdf|png|rar|swf|vsd|z|zip|ttf|so|dat|eps|phar)$/', $file)) {
                 continue;
             }
 

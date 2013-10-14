@@ -8,13 +8,27 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\DataAccess;
+
+use Exception;
+use Piwik\ArchiveProcessor\Rules;
+use Piwik\ArchiveProcessor;
+use Piwik\Common;
+use Piwik\Config;
+use Piwik\Db;
+use Piwik\Db\BatchInsert;
+
+use Piwik\Log;
+use Piwik\Period;
+use Piwik\Segment;
+use Piwik\SettingsPiwik;
 
 /**
  * This class is used to create a new Archive.
  * An Archive is a set of reports (numeric and data tables).
  * New data can be inserted in the archive with insertRecord/insertBulkRecords
  */
-class Piwik_DataAccess_ArchiveWriter
+class ArchiveWriter
 {
     const PREFIX_SQL_LOCK = "locked_";
 
@@ -27,16 +41,41 @@ class Piwik_DataAccess_ArchiveWriter
                               'name',
                               'value');
 
-    public function __construct($idSite, Piwik_Segment $segment, Piwik_Period $period, $requestedPlugin, $isArchiveTemporary)
+    public function __construct($idSite, Segment $segment, Period $period, $requestedPlugin, $isArchiveTemporary)
     {
         $this->idArchive = false;
         $this->idSite = $idSite;
         $this->segment = $segment;
         $this->period = $period;
-        $this->doneFlag = Piwik_ArchiveProcessor_Rules::getDoneStringFlagFor($segment, $period->getLabel(), $requestedPlugin);
+        $this->doneFlag = Rules::getDoneStringFlagFor($segment, $period->getLabel(), $requestedPlugin);
         $this->isArchiveTemporary = $isArchiveTemporary;
 
         $this->dateStart = $this->period->getDateStart();
+    }
+
+    protected function getArchiveLockName()
+    {
+        $numericTable = $this->getTableNumeric();
+        $dbLockName = "allocateNewArchiveId.$numericTable";
+        return $dbLockName;
+    }
+
+    /**
+     * @return array
+     * @throws \Exception
+     */
+    protected function acquireArchiveTableLock()
+    {
+        $dbLockName = $this->getArchiveLockName();
+        if (Db::getDbLock($dbLockName, $maxRetries = 30) === false) {
+            throw new Exception("allocateNewArchiveId: Cannot get named lock for table $numericTable.");
+        }
+    }
+
+    protected function releaseArchiveTableLock()
+    {
+        $dbLockName = $this->getArchiveLockName();
+        Db::releaseDbLock($dbLockName);
     }
 
     public function getIdArchive()
@@ -57,9 +96,9 @@ class Piwik_DataAccess_ArchiveWriter
     protected function acquireLock()
     {
         $lockName = $this->getArchiveProcessorLockName();
-        $result = Piwik_GetDbLock($lockName, $maxRetries = 30);
+        $result = Db::getDbLock($lockName, $maxRetries = 30);
         if (!$result) {
-            Piwik::log("SELECT GET_LOCK failed to acquire lock. Proceeding anyway.");
+            Log::debug("SELECT GET_LOCK failed to acquire lock. Proceeding anyway.");
         }
     }
 
@@ -74,14 +113,10 @@ class Piwik_DataAccess_ArchiveWriter
         $numericTable = $this->getTableNumeric();
         $idSite = $this->idSite;
 
-        $db = Zend_Registry::get('db');
-        $locked = self::PREFIX_SQL_LOCK . Piwik_Common::generateUniqId();
-        $date = date("Y-m-d H:i:s");
-        $dbLockName = "allocateNewArchiveId.$numericTable";
+        $this->acquireArchiveTableLock();
 
-        if (Piwik_GetDbLock($dbLockName, $maxRetries = 30) === false) {
-            throw new Exception("allocateNewArchiveId: Cannot get named lock for table $numericTable.");
-        }
+        $locked = self::PREFIX_SQL_LOCK . Common::generateUniqId();
+        $date = date("Y-m-d H:i:s");
         $insertSql = "INSERT INTO $numericTable "
             . " SELECT ifnull(max(idarchive),0)+1,
 								'" . $locked . "',
@@ -92,16 +127,16 @@ class Piwik_DataAccess_ArchiveWriter
 								'" . $date . "',
 								0 "
             . " FROM $numericTable as tb1";
-        $db->exec($insertSql);
-        Piwik_ReleaseDbLock($dbLockName);
+        Db::get()->exec($insertSql);
+        $this->releaseArchiveTableLock();
         $selectIdSql = "SELECT idarchive FROM $numericTable WHERE name = ? LIMIT 1";
-        $id = $db->fetchOne($selectIdSql, $locked);
+        $id = Db::get()->fetchOne($selectIdSql, $locked);
         return $id;
     }
 
     protected function logArchiveStatusAsIncomplete()
     {
-        $statusWhileProcessing = Piwik_ArchiveProcessor::DONE_ERROR;
+        $statusWhileProcessing = ArchiveProcessor::DONE_ERROR;
         $this->insertRecord($this->doneFlag, $statusWhileProcessing);
     }
 
@@ -110,9 +145,9 @@ class Piwik_DataAccess_ArchiveWriter
         return self::makeLockName($this->idSite, $this->period, $this->segment);
     }
 
-    protected static function makeLockName($idsite, Piwik_Period $period, Piwik_Segment $segment)
+    protected static function makeLockName($idsite, Period $period, Segment $segment)
     {
-        $config = Piwik_Config::getInstance();
+        $config = Config::getInstance();
 
         $lockName = 'piwik.'
             . $config->database['dbname'] . '.'
@@ -122,7 +157,7 @@ class Piwik_DataAccess_ArchiveWriter
             . $period->getId() . '/'
             . $period->getDateStart()->toString('Y-m-d') . ','
             . $period->getDateEnd()->toString('Y-m-d');
-        return $lockName . '/' . md5($lockName . Piwik_Common::getSalt());
+        return $lockName . '/' . md5($lockName . SettingsPiwik::getSalt());
     }
 
     public function finalizeArchive()
@@ -134,18 +169,22 @@ class Piwik_DataAccess_ArchiveWriter
 
     protected function deletePreviousArchiveStatus()
     {
+        // without advisory lock here, the DELETE would acquire Exclusive Lock
+        $this->acquireArchiveTableLock();
 
-        Piwik_Query("DELETE FROM " . $this->getTableNumeric() . "
+        Db::query("DELETE FROM " . $this->getTableNumeric() . "
 					WHERE idarchive = ? AND (name = '" . $this->doneFlag . "' OR name LIKE '" . self::PREFIX_SQL_LOCK . "%')",
             array($this->getIdArchive())
         );
+
+        $this->releaseArchiveTableLock();
     }
 
     protected function logArchiveStatusAsFinal()
     {
-        $status = Piwik_ArchiveProcessor::DONE_OK;
+        $status = ArchiveProcessor::DONE_OK;
         if ($this->isArchiveTemporary) {
-            $status = Piwik_ArchiveProcessor::DONE_OK_TEMPORARY;
+            $status = ArchiveProcessor::DONE_OK_TEMPORARY;
         }
         $this->insertRecord($this->doneFlag, $status);
     }
@@ -153,7 +192,7 @@ class Piwik_DataAccess_ArchiveWriter
     protected function releaseArchiveProcessorLock()
     {
         $lockName = $this->getArchiveProcessorLockName();
-        return Piwik_ReleaseDbLock($lockName);
+        return Db::releaseDbLock($lockName);
     }
 
     public function insertBulkRecords($records)
@@ -185,7 +224,7 @@ class Piwik_DataAccess_ArchiveWriter
         if (empty($values)) return true;
 
         $tableName = $this->getTableNameToInsert($valueSeen);
-        Piwik::tableInsertBatch($tableName, $this->getInsertFields(), $values);
+        BatchInsert::tableInsertBatch($tableName, $this->getInsertFields(), $values);
         return true;
     }
 
@@ -194,6 +233,8 @@ class Piwik_DataAccess_ArchiveWriter
      *
      * @param string $name
      * @param mixed $value
+     *
+     * @return bool
      */
     public function insertRecord($name, $value)
     {
@@ -210,7 +251,7 @@ class Piwik_DataAccess_ArchiveWriter
         $bindSql = $this->getInsertRecordBind();
         $bindSql[] = $name;
         $bindSql[] = $value;
-        Piwik_Query($query, $bindSql);
+        Db::query($query, $bindSql);
         return true;
     }
 
@@ -229,12 +270,12 @@ class Piwik_DataAccess_ArchiveWriter
         if (is_numeric($value)) {
             return $this->getTableNumeric();
         }
-        return Piwik_DataAccess_ArchiveTableCreator::getBlobTable($this->dateStart);;
+        return ArchiveTableCreator::getBlobTable($this->dateStart);
     }
 
     protected function getTableNumeric()
     {
-        return Piwik_DataAccess_ArchiveTableCreator::getNumericTable($this->dateStart);
+        return ArchiveTableCreator::getNumericTable($this->dateStart);
     }
 
     protected function getInsertFields()

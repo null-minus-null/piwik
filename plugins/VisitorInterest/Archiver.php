@@ -6,10 +6,16 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_VisitorInterest
+ * @package VisitorInterest
  */
 
-class Piwik_VisitorInterest_Archiver extends Piwik_PluginsArchiver
+namespace Piwik\Plugins\VisitorInterest;
+
+use Piwik\DataAccess\LogAggregator;
+use Piwik\DataTable;
+use Piwik\Metrics;
+
+class Archiver extends \Piwik\Plugin\Archiver
 {
     // third element is unit (s for seconds, default is munutes)
     const TIME_SPENT_RECORD_NAME = 'VisitorInterest_timeGap';
@@ -85,9 +91,9 @@ class Piwik_VisitorInterest_Archiver extends Piwik_PluginsArchiver
         // these prefixes are prepended to the 'SELECT as' parts of each SELECT expression. detecting
         // these prefixes allows us to get all the data in one query.
         $prefixes = array(
-            self::TIME_SPENT_RECORD_NAME => 'tg',
-            self::PAGES_VIEWED_RECORD_NAME => 'pg',
-            self::VISITS_COUNT_RECORD_NAME => 'vbvn',
+            self::TIME_SPENT_RECORD_NAME      => 'tg',
+            self::PAGES_VIEWED_RECORD_NAME    => 'pg',
+            self::VISITS_COUNT_RECORD_NAME    => 'vbvn',
             self::DAYS_SINCE_LAST_RECORD_NAME => 'dslv',
         );
 
@@ -96,19 +102,19 @@ class Piwik_VisitorInterest_Archiver extends Piwik_PluginsArchiver
             array('visit_total_actions', self::$pageGap, 'log_visit', $prefixes[self::PAGES_VIEWED_RECORD_NAME]),
             array('visitor_count_visits', self::$visitNumberGap, 'log_visit', $prefixes[self::VISITS_COUNT_RECORD_NAME]),
             array('visitor_days_since_last', self::$daysSinceLastVisitGap, 'log_visit', $prefixes[self::DAYS_SINCE_LAST_RECORD_NAME],
-                  $i_am_your_nightmare_DELETE_ME = true
+                  $restrictToReturningVisitors = true
             ),
         );
         $selects = array();
-        foreach($aggregatesMetadata as $aggregateMetadata) {
-            $selectsFromRangedColumn = Piwik_DataAccess_LogAggregator::getSelectsFromRangedColumn($aggregateMetadata);
-            $selects = array_merge( $selects, $selectsFromRangedColumn);
+        foreach ($aggregatesMetadata as $aggregateMetadata) {
+            $selectsFromRangedColumn = LogAggregator::getSelectsFromRangedColumn($aggregateMetadata);
+            $selects = array_merge($selects, $selectsFromRangedColumn);
         }
         $query = $this->getLogAggregator()->queryVisitsByDimension(array(), $where = false, $selects, array());
         $row = $query->fetch();
-        foreach($prefixes as $recordName => $selectAsPrefix) {
-            $cleanRow = Piwik_DataAccess_LogAggregator::makeArrayOneColumn($row, Piwik_Metrics::INDEX_NB_VISITS, $selectAsPrefix);
-            $dataTable = Piwik_DataTable::makeFromIndexedArray($cleanRow);
+        foreach ($prefixes as $recordName => $selectAsPrefix) {
+            $cleanRow = LogAggregator::makeArrayOneColumn($row, Metrics::INDEX_NB_VISITS, $selectAsPrefix);
+            $dataTable = DataTable::makeFromIndexedArray($cleanRow);
             $this->getProcessor()->insertBlobRecord($recordName, $dataTable->getSerialized());
         }
     }

@@ -5,6 +5,7 @@
  * @link    http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\Plugins\API\API;
 
 /**
  * testing a segment containing all supported fields
@@ -41,7 +42,7 @@ class Test_Piwik_Integration_TwoVisitsWithCustomVariables_SegmentMatchNONE exten
     public function getSegmentToTest()
     {
         // Segment matching NONE
-        $segments = Piwik_API_API::getInstance()->getSegmentsMetadata(self::$fixture->idSite);
+        $segments = API::getInstance()->getSegmentsMetadata(self::$fixture->idSite);
 
         $minimumExpectedSegmentsCount = 55; // as of Piwik 1.12
         $this->assertTrue( count($segments) >= $minimumExpectedSegmentsCount);
@@ -57,7 +58,13 @@ class Test_Piwik_Integration_TwoVisitsWithCustomVariables_SegmentMatchNONE exten
             if ($segment['segment'] == 'visitEcommerceStatus') {
                 $value = 'none';
             }
-            $segmentExpression[] = $segment['segment'] . '!=' . $value;
+            $matchNone = $segment['segment'] . '!=' . $value;
+
+            // deviceType != campaign matches ALL visits, but we want to match None
+            if($segment['segment'] == 'deviceType') {
+                $matchNone = $segment['segment'] . '==car%20browser';
+            }
+            $segmentExpression[] = $matchNone;
         }
 
         $segment = implode(";", $segmentExpression);
@@ -69,7 +76,7 @@ class Test_Piwik_Integration_TwoVisitsWithCustomVariables_SegmentMatchNONE exten
         return $segment;
     }
 
-    public function getOutputPrefix()
+    public static function getOutputPrefix()
     {
         return 'twoVisitsWithCustomVariables_segmentMatchNONE';
     }

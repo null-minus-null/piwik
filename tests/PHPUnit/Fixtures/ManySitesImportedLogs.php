@@ -5,43 +5,70 @@
  * @link    http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\Access;
+use Piwik\Plugins\Goals\API as APIGoals;
+use Piwik\Plugins\SegmentEditor\API as APISegmentEditor;
+use Piwik\Plugins\UserCountry\LocationProvider;
+use Piwik\Plugins\UserCountry\LocationProvider\GeoIp;
 
 /**
  * Imports visits from several log files using the python log importer.
  */
 class Test_Piwik_Fixture_ManySitesImportedLogs extends Test_Piwik_BaseFixture
 {
-    public $dateTime = '2010-03-06 11:22:33';
+    public $dateTime = '2012-08-09 11:22:33';
     public $idSite = 1;
     public $idSite2 = 2;
     public $idGoal = 1;
+    public $segments = null; // should be array mapping segment name => segment definition
+    
+    public $addSegments = false;
 
     public function setUp()
     {
         $this->setUpWebsitesAndGoals();
         self::downloadGeoIpDbs();
 
-        Piwik_UserCountry_LocationProvider::$providers = null;
-        Piwik_UserCountry_LocationProvider_GeoIp::$geoIPDatabaseDir = 'tests/lib/geoip-files';
-        Piwik_UserCountry_LocationProvider::setCurrentProvider('geoip_php');
+        LocationProvider::$providers = null;
+        GeoIp::$geoIPDatabaseDir = 'tests/lib/geoip-files';
+        LocationProvider::setCurrentProvider('geoip_php');
 
         $this->trackVisits();
+        $this->setupSegments();
     }
 
     public function tearDown()
     {
-        Piwik_UserCountry_LocationProvider::$providers = null;
-        Piwik_UserCountry_LocationProvider_GeoIp::$geoIPDatabaseDir = 'tests/lib/geoip-files';
-        Piwik_UserCountry_LocationProvider::setCurrentProvider('default');
+        LocationProvider::$providers = null;
+        GeoIp::$geoIPDatabaseDir = 'tests/lib/geoip-files';
+        LocationProvider::setCurrentProvider('default');
     }
 
     public function setUpWebsitesAndGoals()
     {
         // for conversion testing
         self::createWebsite($this->dateTime);
-        Piwik_Goals_API::getInstance()->addGoal($this->idSite, 'all', 'url', 'http', 'contains', false, 5);
+        APIGoals::getInstance()->addGoal($this->idSite, 'all', 'url', 'http', 'contains', false, 5);
         self::createWebsite($this->dateTime, $ecommerce = 0, $siteName = 'Piwik test two',
             $siteUrl = 'http://example-site-two.com');
+    }
+    
+    public function getDefaultSegments()
+    {
+        return array(
+            'segmentOnlyOneSite'   => array('definition'      => 'browserCode==IE',
+                                            'idSite'          => $this->idSite,
+                                            'autoArchive'     => true,
+                                            'enabledAllUsers' => true),
+            'segmentNoAutoArchive' => array('definition'      => 'customVariableName1==Not-bot',
+                                            'idSite'          => false,
+                                            'autoArchive'     => false,
+                                            'enabledAllUsers' => true),
+            'segmentOnlySuperuser' => array('definition'      => 'customVariablePageName1==HTTP-code',
+                                            'idSite'          => false,
+                                            'autoArchive'     => true,
+                                            'enabledAllUsers' => false),
+        );
     }
 
     private function trackVisits()
@@ -50,6 +77,37 @@ class Test_Piwik_Fixture_ManySitesImportedLogs extends Test_Piwik_BaseFixture
         $this->logVisitsWithAllEnabled();
         $this->replayLogFile();
         $this->logCustomFormat();
+    }
+    
+    private function setupSegments()
+    {
+        if (!$this->addSegments) {
+            return;
+        }
+        
+        if ($this->segments === null) {
+            $this->segments = $this->getDefaultSegments();
+        }
+        
+        foreach ($this->segments as $segmentName => $info) {
+            $idSite = false;
+            if (isset($info['idSite'])) {
+                $idSite = $info['idSite'];
+            }
+            
+            $autoArchive = true;
+            if (isset($info['autoArchive'])) {
+                $autoArchive = $info['autoArchive'];
+            }
+            
+            $enabledAllUsers = true;
+            if (isset($info['enabledAllUsers'])) {
+                $enabledAllUsers = $info['enabledAllUsers'];
+            }
+            
+            APISegmentEditor::getInstance()->add(
+                $segmentName, $info['definition'], $idSite, $autoArchive, $enabledAllUsers);
+        }
     }
 
     /**
@@ -135,5 +193,13 @@ class Test_Piwik_Fixture_ManySitesImportedLogs extends Test_Piwik_BaseFixture
 
         self::executeLogImporter($logFile, $opts);
     }
+}
 
+// needed by tests that use stored segments w/ the proxy index.php
+class Test_Access_OverrideLogin extends Access
+{
+    public function getLogin()
+    {
+        return 'superUserLogin';
+    }
 }

@@ -9,11 +9,17 @@
  * @package Piwik
  */
 
+namespace Piwik;
+
+use Exception;
+use Piwik\Plugins\SitesManager\API;
+
 /**
  *
  * @package Piwik
+ * @api
  */
-class Piwik_Site
+class Site
 {
     /**
      * @var int|null
@@ -32,7 +38,7 @@ class Piwik_Site
     {
         $this->id = (int)$idsite;
         if (!isset(self::$infoSites[$this->id])) {
-            self::$infoSites[$this->id] = Piwik_SitesManager_API::getInstance()->getSiteFromId($this->id);
+            self::$infoSites[$this->id] = API::getInstance()->getSiteFromId($this->id);
         }
     }
 
@@ -40,7 +46,7 @@ class Piwik_Site
      * Sets the cached Site data with an array that associates site IDs with
      * individual site data.
      *
-     * @param array $sites  The array of sites data. Indexed by site ID.
+     * @param array $sites The array of sites data. Indexed by site ID.
      */
     public static function setSites($sites)
     {
@@ -50,7 +56,7 @@ class Piwik_Site
     /**
      * Sets the cached Site data with a non-associated array of site data.
      *
-     * @param array $sites  The array of sites data.
+     * @param array $sites The array of sites data.
      */
     public static function setSitesFromArray($sites)
     {
@@ -107,7 +113,7 @@ class Piwik_Site
 
     /**
      * Returns a site property
-     * @param string $name  property to return
+     * @param string $name property to return
      * @return mixed
      * @throws Exception
      */
@@ -122,12 +128,12 @@ class Piwik_Site
     /**
      * Returns the creation date of the site
      *
-     * @return Piwik_Date
+     * @return Date
      */
     function getCreationDate()
     {
         $date = $this->get('ts_created');
-        return Piwik_Date::factory($date);
+        return Date::factory($date);
     }
 
     /**
@@ -204,13 +210,13 @@ class Piwik_Site
      * Checks the given string for valid site ids and returns them as an array
      *
      * @param string $ids comma separated idSite list
-     * @param false|string $_restrictSitesToLogin Used only when running as a scheduled task.
+     * @param bool|string $_restrictSitesToLogin Used only when running as a scheduled task.
      * @return array of valid integer
      */
     static public function getIdSitesFromIdSitesString($ids, $_restrictSitesToLogin = false)
     {
         if ($ids === 'all') {
-            return Piwik_SitesManager_API::getInstance()->getSitesIdWithAtLeastViewAccess($_restrictSitesToLogin);
+            return API::getInstance()->getSitesIdWithAtLeastViewAccess($_restrictSitesToLogin);
         }
 
         if (!is_array($ids)) {
@@ -241,9 +247,9 @@ class Piwik_Site
      * Utility function. Returns the value of the specified field for the
      * site with the specified ID.
      *
-     * @param int|string $idsite  The ID of the site whose data is being
+     * @param int|string $idsite The ID of the site whose data is being
      *                             accessed.
-     * @param string $field   The name of the field to get.
+     * @param string $field The name of the field to get.
      * @return mixed
      */
     static protected function getFor($idsite, $field)
@@ -251,7 +257,7 @@ class Piwik_Site
         $idsite = (int)$idsite;
 
         if (!isset(self::$infoSites[$idsite])) {
-            self::$infoSites[$idsite] = Piwik_SitesManager_API::getInstance()->getSiteFromId($idsite);
+            self::$infoSites[$idsite] = API::getInstance()->getSiteFromId($idsite);
         }
 
         return self::$infoSites[$idsite][$field];
@@ -260,7 +266,7 @@ class Piwik_Site
     /**
      * Returns the name of the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getNameFor($idsite)
@@ -271,7 +277,7 @@ class Piwik_Site
     /**
      * Returns the timezone of the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getTimezoneFor($idsite)
@@ -282,7 +288,7 @@ class Piwik_Site
     /**
      * Returns the creation date of the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getCreationDateFor($idsite)
@@ -293,7 +299,7 @@ class Piwik_Site
     /**
      * Returns the url for the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getMainUrlFor($idsite)
@@ -304,7 +310,7 @@ class Piwik_Site
     /**
      * Returns whether the site with the specified ID is ecommerce enabled
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function isEcommerceEnabledFor($idsite)
@@ -315,7 +321,7 @@ class Piwik_Site
     /**
      * Returns whether the site with the specified ID is Site Search enabled
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function isSiteSearchEnabledFor($idsite)
@@ -326,7 +332,7 @@ class Piwik_Site
     /**
      * Returns the currency of the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getCurrencyFor($idsite)
@@ -337,7 +343,7 @@ class Piwik_Site
     /**
      * Returns the excluded IP addresses of the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getExcludedIpsFor($idsite)
@@ -348,7 +354,7 @@ class Piwik_Site
     /**
      * Returns the excluded query parameters for the site with the specified ID.
      *
-     * @param int $idsite  The site ID.
+     * @param int $idsite The site ID.
      * @return string
      */
     static public function getExcludedQueryParametersFor($idsite)

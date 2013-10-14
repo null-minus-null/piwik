@@ -42,7 +42,7 @@ class Test_Piwik_Integration_TwoVisitors_TwoWebsites_DifferentDays extends Integ
     {
         return array('VisitFrequency.get',
                      'VisitsSummary.get',
-                     'Referers.getWebsites',
+                     'Referrers.getWebsites',
                      'Actions.getPageUrls',
                      'Actions.getPageTitles',
                      'Actions.getOutlinks',
@@ -102,7 +102,7 @@ class Test_Piwik_Integration_TwoVisitors_TwoWebsites_DifferentDays extends Integ
         return array_merge($result, self::getApiForTestingScheduledReports($dateTime, 'month'));
     }
 
-    public function getOutputPrefix()
+    public static function getOutputPrefix()
     {
         return 'TwoVisitors_twoWebsites_differentDays';
     }

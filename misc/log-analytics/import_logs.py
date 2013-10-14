@@ -57,7 +57,7 @@ DOWNLOAD_EXTENSIONS = (
     '7z aac arc arj asf asx avi bin csv deb dmg doc exe flv gz gzip hqx '
     'jar mpg mp2 mp3 mp4 mpeg mov movie msi msp odb odf odg odp '
     'ods odt ogg ogv pdf phps ppt qt qtm ra ram rar rpm sea sit tar tbz '
-    'bz2 tbz tgz torrent txt wav wma wmv wpd xls xml z zip'
+    'bz2 tbz tgz torrent txt wav wma wmv wpd xls xml xsd z zip'
 ).split()
 
 
@@ -116,7 +116,7 @@ class RegexFormat(object):
         line = file.readline()
         file.seek(0)
         return self.check_format_line(line)
-    
+
     def check_format_line(self, line):
         return re.match(self.regex, line)
 
@@ -158,7 +158,7 @@ class IisFormat(RegexFormat):
                 regex = '\S+'
             full_regex.append(regex)
         self.regex = re.compile(' '.join(full_regex))
-        
+
         start_pos = file.tell()
         nextline = file.readline()
         file.seek(start_pos)
@@ -763,6 +763,7 @@ class Piwik(object):
         elif not isinstance(data, basestring) and headers['Content-type'] == 'application/json':
             data = json.dumps(data)
 
+        headers['User-Agent'] = 'Piwik/LogImport'
         request = urllib2.Request(url + path, data, headers)
         response = urllib2.urlopen(request)
         result = response.read()
@@ -807,7 +808,8 @@ class Piwik(object):
         try:
             return json.loads(res)
         except ValueError:
-            raise urllib2.URLError('Piwik returned an invalid response: ' + res[:300])
+            truncate_after = 300
+            raise urllib2.URLError('Piwik returned an invalid response: ' + res[:truncate_after])
 
 
     @staticmethod
@@ -823,7 +825,7 @@ class Piwik(object):
                     if on_failure is not None:
                         error_message = on_failure(response, kwargs.get('data'))
                     else:
-                        truncate_after = 200
+                        truncate_after = 300
                         truncated_response = (response[:truncate_after] + '..') if len(response) > truncate_after else response
                         error_message = "didn't receive the expected response. Response was %s " % truncated_response
 
@@ -875,7 +877,7 @@ class StaticResolver(object):
             site = sites[0]
         except (IndexError, KeyError):
             logging.debug('response for SitesManager.getSiteFromId: %s', str(sites))
-            
+
             fatal_error(
                 "cannot get the main URL of this site: invalid site ID: %s" % site_id
             )
@@ -976,7 +978,7 @@ class DynamicResolver(object):
             return (site_id, self._cache['sites'][site_id]['main_url'])
         else:
             return (None, None)
-    
+
     def _resolve_by_host(self, hit):
         """
         Returns the site ID and site URL for a hit based on the hostname.
@@ -1131,7 +1133,7 @@ class Recorder(object):
         path = hit.path
         if hit.query_string and not config.options.strip_query_string:
             path += config.options.query_string_delimiter + hit.query_string
-        
+
         # only prepend main url if it's a path
         url = (main_url if path.startswith('/') else '') + path[:1024]
 
@@ -1181,7 +1183,7 @@ class Recorder(object):
         if not config.options.dry_run:
             piwik.call(
                 '/piwik.php', args={},
-                expected_content=PIWIK_EXPECTED_IMAGE,
+                expected_content=None,
                 headers={'Content-type': 'application/json'},
                 data=data,
                 on_failure=self._on_tracking_failure
@@ -1201,10 +1203,10 @@ class Recorder(object):
             return response
 
         # remove the successfully tracked hits from payload
-        succeeded = response['succeeded']
-        data['requests'] = data['requests'][succeeded:]
+        succeeded = response['tracked']
+        data['requests'] = data['requests'][tracked:]
 
-        return response['error']
+        return response['message']
 
     @staticmethod
     def invalidate_reports():
@@ -1237,7 +1239,7 @@ class Hit(object):
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
         super(Hit, self).__init__()
-        
+
         if config.options.force_lowercase_path:
             self.full_path = self.full_path.lower()
 
@@ -1333,14 +1335,14 @@ class Parser(object):
         Return the best matching format for this file, or None if none was found.
         """
         logging.debug('Detecting the log format')
-        
+
         format = None
         format_groups = 0
         for name, candidate_format in FORMATS.iteritems():
             match = candidate_format.check_format(file)
             if match:
                 logging.debug('Format %s matches', name)
-                
+
                 # if there's more info in this match, use this format
                 match_groups = len(match.groups())
                 if format_groups < match_groups:
@@ -1348,7 +1350,12 @@ class Parser(object):
                     format_groups = match_groups
             else:
                 logging.debug('Format %s does not match', name)
-        
+
+        if not format:
+            fatal_error("cannot determine the log format using the first line of the log file. Try removing it" +
+                        " or specifying the format with the --log-format-name command line argument.")
+            return
+
         logging.debug('Format %s is the best match', format.name)
         return format
 

@@ -8,6 +8,10 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\Db;
+
+use Piwik\Config;
+use Piwik\Singleton;
 
 /**
  * Schema abstraction
@@ -17,14 +21,8 @@
  * @package Piwik
  * @subpackage Piwik_Db
  */
-class Piwik_Db_Schema
+class Schema extends Singleton
 {
-    /**
-     * Singleton instance
-     *
-     * @var Piwik_Db_Schema
-     */
-    static private $instance = null;
 
     /**
      * Type of database schema
@@ -33,18 +31,6 @@ class Piwik_Db_Schema
      */
     private $schema = null;
 
-    /**
-     * Returns the singleton Piwik_Db_Schema
-     *
-     * @return Piwik_Db_Schema
-     */
-    static public function getInstance()
-    {
-        if (self::$instance === null) {
-            self::$instance = new self;
-        }
-        return self::$instance;
-    }
 
     /**
      * Get schema class name
@@ -54,7 +40,7 @@ class Piwik_Db_Schema
      */
     private static function getSchemaClassName($schemaName)
     {
-        return 'Piwik_Db_Schema_' . str_replace(' ', '_', ucwords(str_replace('_', ' ', strtolower($schemaName))));
+        return '\Piwik\Db\Schema\\' . str_replace(' ', '\\', ucwords(str_replace('_', ' ', strtolower($schemaName))));
     }
 
     /**
@@ -113,7 +99,7 @@ class Piwik_Db_Schema
         $schemas = array();
 
         foreach ($schemaNames as $schemaName) {
-            $className = 'Piwik_Db_Schema_' . $schemaName;
+            $className = __NAMESPACE__ . '\\Schema\\' . $schemaName;
             if (call_user_func(array($className, 'isAvailable'))) {
                 $schemas[] = $schemaName;
             }
@@ -127,26 +113,21 @@ class Piwik_Db_Schema
      */
     private function loadSchema()
     {
-        $schema = null;
-        Piwik_PostEvent('Schema.loadSchema', $schema);
-        if ($schema === null) {
-            $config = Piwik_Config::getInstance();
-            $dbInfos = $config->database;
-            if (isset($dbInfos['schema'])) {
-                $schemaName = $dbInfos['schema'];
-            } else {
-                $schemaName = 'Myisam';
-            }
-            $className = self::getSchemaClassName($schemaName);
-            $schema = new $className();
+        $config = Config::getInstance();
+        $dbInfos = $config->database;
+        if (isset($dbInfos['schema'])) {
+            $schemaName = $dbInfos['schema'];
+        } else {
+            $schemaName = 'Myisam';
         }
-        $this->schema = $schema;
+        $className = self::getSchemaClassName($schemaName);
+        $this->schema = new $className();
     }
 
     /**
-     * Returns an instance that subclasses Piwik_Db_Schema
+     * Returns an instance that subclasses Schema
      *
-     * @return Piwik_Db_Schema_Interface
+     * @return \Piwik\Db\SchemaInterface
      */
     private function getSchema()
     {
@@ -159,7 +140,7 @@ class Piwik_Db_Schema
     /**
      * Get the SQL to create a specific Piwik table
      *
-     * @param string $tableName  name of the table to create
+     * @param string $tableName name of the table to create
      * @return string  SQL
      */
     public function getTableCreateSql($tableName)
@@ -180,7 +161,7 @@ class Piwik_Db_Schema
     /**
      * Create database
      *
-     * @param null|string $dbName  database name to create
+     * @param null|string $dbName database name to create
      */
     public function createDatabase($dbName = null)
     {
@@ -243,7 +224,7 @@ class Piwik_Db_Schema
     /**
      * Get list of tables installed
      *
-     * @param bool $forceReload  Invalidate cache
+     * @param bool $forceReload Invalidate cache
      * @return array  installed tables
      */
     public function getTablesInstalled($forceReload = true)

@@ -6,10 +6,18 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_Goals
+ * @package Goals
  */
 
-class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
+namespace Piwik\Plugins\Goals;
+
+use Piwik\DataAccess\LogAggregator;
+use Piwik\DataArray;
+use Piwik\DataTable;
+use Piwik\Metrics;
+use Piwik\Tracker\GoalManager;
+
+class Archiver extends \Piwik\Plugin\Archiver
 {
     const VISITS_UNTIL_RECORD_NAME = 'visits_until_conv';
     const DAYS_UNTIL_CONV_RECORD_NAME = 'days_until_conv';
@@ -94,7 +102,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
         );
         $selects = array();
         foreach ($aggregatesMetadata as $aggregateMetadata) {
-            $selects = array_merge($selects, Piwik_DataAccess_LogAggregator::getSelectsFromRangedColumn($aggregateMetadata));
+            $selects = array_merge($selects, LogAggregator::getSelectsFromRangedColumn($aggregateMetadata));
         }
 
         $query = $this->getLogAggregator()->queryConversionsByDimension(array(), false, $selects);
@@ -103,7 +111,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
         }
 
         $totalConversions = $totalRevenue = 0;
-        $goals = new Piwik_DataArray();
+        $goals = new DataArray();
         $visitsToConversions = $daysToConversions = array();
 
         $conversionMetrics = $this->getLogAggregator()->getConversionsMetricFields();
@@ -113,28 +121,28 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
             unset($row['label']);
 
             $values = array();
-            foreach($conversionMetrics as $field => $statement) {
+            foreach ($conversionMetrics as $field => $statement) {
                 $values[$field] = $row[$field];
             }
             $goals->sumMetrics($idGoal, $values);
 
             if (empty($visitsToConversions[$idGoal])) {
-                $visitsToConversions[$idGoal] = new Piwik_DataTable();
+                $visitsToConversions[$idGoal] = new DataTable();
             }
-            $array = Piwik_DataAccess_LogAggregator::makeArrayOneColumn($row, Piwik_Metrics::INDEX_NB_CONVERSIONS, $prefixes[self::VISITS_UNTIL_RECORD_NAME]);
-            $visitsToConversions[$idGoal]->addDataTable(Piwik_DataTable::makeFromIndexedArray($array));
+            $array = LogAggregator::makeArrayOneColumn($row, Metrics::INDEX_NB_CONVERSIONS, $prefixes[self::VISITS_UNTIL_RECORD_NAME]);
+            $visitsToConversions[$idGoal]->addDataTable(DataTable::makeFromIndexedArray($array));
 
             if (empty($daysToConversions[$idGoal])) {
-                $daysToConversions[$idGoal] = new Piwik_DataTable();
+                $daysToConversions[$idGoal] = new DataTable();
             }
-            $array = Piwik_DataAccess_LogAggregator::makeArrayOneColumn($row, Piwik_Metrics::INDEX_NB_CONVERSIONS, $prefixes[self::DAYS_UNTIL_CONV_RECORD_NAME]);
-            $daysToConversions[$idGoal]->addDataTable(Piwik_DataTable::makeFromIndexedArray($array));
+            $array = LogAggregator::makeArrayOneColumn($row, Metrics::INDEX_NB_CONVERSIONS, $prefixes[self::DAYS_UNTIL_CONV_RECORD_NAME]);
+            $daysToConversions[$idGoal]->addDataTable(DataTable::makeFromIndexedArray($array));
 
             // We don't want to sum Abandoned cart metrics in the overall revenue/conversions/converted visits
             // since it is a "negative conversion"
-            if ($idGoal != Piwik_Tracker_GoalManager::IDGOAL_CART) {
-                $totalConversions += $row[Piwik_Metrics::INDEX_GOAL_NB_CONVERSIONS];
-                $totalRevenue += $row[Piwik_Metrics::INDEX_GOAL_REVENUE];
+            if ($idGoal != GoalManager::IDGOAL_CART) {
+                $totalConversions += $row[Metrics::INDEX_GOAL_NB_CONVERSIONS];
+                $totalRevenue += $row[Metrics::INDEX_GOAL_REVENUE];
             }
         }
 
@@ -156,18 +164,18 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
         $this->getProcessor()->insertNumericRecords($metrics);
     }
 
-    protected function getConversionsNumericMetrics(Piwik_DataArray $goals)
+    protected function getConversionsNumericMetrics(DataArray $goals)
     {
         $numericRecords = array();
         $goals = $goals->getDataArray();
         foreach ($goals as $idGoal => $array) {
             foreach ($array as $metricId => $value) {
-                $metricName = Piwik_Metrics::$mappingFromIdToNameGoal[$metricId];
+                $metricName = Metrics::$mappingFromIdToNameGoal[$metricId];
                 $recordName = self::getRecordName($metricName, $idGoal);
                 $numericRecords[$recordName] = $value;
             }
-            if(!empty($array[Piwik_Metrics::INDEX_GOAL_NB_VISITS_CONVERTED])) {
-                $conversion_rate = $this->getConversionRate($array[Piwik_Metrics::INDEX_GOAL_NB_VISITS_CONVERTED]);
+            if (!empty($array[Metrics::INDEX_GOAL_NB_VISITS_CONVERTED])) {
+                $conversion_rate = $this->getConversionRate($array[Metrics::INDEX_GOAL_NB_VISITS_CONVERTED]);
                 $recordName = self::getRecordName('conversion_rate', $idGoal);
                 $numericRecords[$recordName] = $conversion_rate;
             }
@@ -192,7 +200,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
     protected function getConversionRate($count)
     {
         $visits = $this->getProcessor()->getNumberOfVisits();
-        return round(100 * $count / $visits, Piwik_Tracker_GoalManager::REVENUE_PRECISION);
+        return round(100 * $count / $visits, GoalManager::REVENUE_PRECISION);
     }
 
     protected function insertReports($recordName, $visitsToConversions)
@@ -207,7 +215,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
 
     protected function getOverviewFromGoalTables($tableByGoal)
     {
-        $overview = new Piwik_DataTable();
+        $overview = new DataTable();
         foreach ($tableByGoal as $idGoal => $table) {
             if ($this->isStandardGoal($idGoal)) {
                 $overview->addDataTable($table);
@@ -235,24 +243,25 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
             $this->aggregateFromEcommerceItems($query, $dimension);
         }
         $this->recordItemReports();
+        return true;
     }
 
     protected function initItemReports()
     {
         foreach ($this->getEcommerceIdGoals() as $ecommerceType) {
             foreach ($this->dimensionRecord as $dimension => $record) {
-                $this->itemReports[$dimension][$ecommerceType] = new Piwik_DataArray();
+                $this->itemReports[$dimension][$ecommerceType] = new DataArray();
             }
         }
     }
 
     protected function recordItemReports()
     {
-        /** @var Piwik_DataArray $array */
+        /** @var DataArray $array */
         foreach ($this->itemReports as $dimension => $itemAggregatesByType) {
             foreach ($itemAggregatesByType as $ecommerceType => $itemAggregate) {
                 $recordName = $this->dimensionRecord[$dimension];
-                if ($ecommerceType == Piwik_Tracker_GoalManager::IDGOAL_CART) {
+                if ($ecommerceType == GoalManager::IDGOAL_CART) {
                     $recordName = self::getItemRecordNameAbandonedCart($recordName);
                 }
                 $table = $this->getProcessor()->getDataTableFromDataArray($itemAggregate);
@@ -323,17 +332,17 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
             }
             $label = "Value not defined";
             // Product Name/Category not defined"
-            if (class_exists('Piwik_CustomVariables')) {
-                $label = Piwik_CustomVariables_Archiver::LABEL_CUSTOM_VALUE_NOT_DEFINED;
+            if (\Piwik\Plugin\Manager::getInstance()->isPluginActivated('CustomVariables')) {
+                $label = \Piwik\Plugins\CustomVariables\Archiver::LABEL_CUSTOM_VALUE_NOT_DEFINED;
             }
         }
 
-        if ($row['ecommerceType'] == Piwik_Tracker_GoalManager::IDGOAL_CART) {
+        if ($row['ecommerceType'] == GoalManager::IDGOAL_CART) {
             // abandoned carts are the numner of visits with an abandoned cart
-            $row[Piwik_Metrics::INDEX_ECOMMERCE_ORDERS] = $row[Piwik_Metrics::INDEX_NB_VISITS];
+            $row[Metrics::INDEX_ECOMMERCE_ORDERS] = $row[Metrics::INDEX_NB_VISITS];
         }
 
-        unset($row[Piwik_Metrics::INDEX_NB_VISITS]);
+        unset($row[Metrics::INDEX_NB_VISITS]);
         unset($row['label']);
         unset($row['ecommerceType']);
 
@@ -343,10 +352,10 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
     protected function roundColumnValues(&$row)
     {
         $columnsToRound = array(
-            Piwik_Metrics::INDEX_ECOMMERCE_ITEM_REVENUE,
-            Piwik_Metrics::INDEX_ECOMMERCE_ITEM_QUANTITY,
-            Piwik_Metrics::INDEX_ECOMMERCE_ITEM_PRICE,
-            Piwik_Metrics::INDEX_ECOMMERCE_ITEM_PRICE_VIEWED,
+            Metrics::INDEX_ECOMMERCE_ITEM_REVENUE,
+            Metrics::INDEX_ECOMMERCE_ITEM_QUANTITY,
+            Metrics::INDEX_ECOMMERCE_ITEM_PRICE,
+            Metrics::INDEX_ECOMMERCE_ITEM_PRICE_VIEWED,
         );
         foreach ($columnsToRound as $column) {
             if (isset($row[$column])
@@ -359,7 +368,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
 
     protected function getEcommerceIdGoals()
     {
-        return array(Piwik_Tracker_GoalManager::IDGOAL_CART, Piwik_Tracker_GoalManager::IDGOAL_ORDER);
+        return array(GoalManager::IDGOAL_CART, GoalManager::IDGOAL_ORDER);
     }
 
     static public function getItemRecordNameAbandonedCart($recordName)
@@ -368,7 +377,7 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
     }
 
     /**
-     * @param $this->getProcessor()
+     * @internal param $this->getProcessor()
      */
     public function archivePeriod()
     {
@@ -386,17 +395,17 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
         /*
          *  Archive General Goal metrics
          */
-        $goalIdsToSum = Piwik_Tracker_GoalManager::getGoalIds($this->getProcessor()->getSite()->getId());
+        $goalIdsToSum = GoalManager::getGoalIds($this->getProcessor()->getSite()->getId());
 
         //Ecommerce
-        $goalIdsToSum[] = Piwik_Tracker_GoalManager::IDGOAL_ORDER;
-        $goalIdsToSum[] = Piwik_Tracker_GoalManager::IDGOAL_CART; //bug here if idgoal=1
+        $goalIdsToSum[] = GoalManager::IDGOAL_ORDER;
+        $goalIdsToSum[] = GoalManager::IDGOAL_CART; //bug here if idgoal=1
         // Overall goal metrics
         $goalIdsToSum[] = false;
 
         $fieldsToSum = array();
         foreach ($goalIdsToSum as $goalId) {
-            $metricsToSum = Piwik_Goals::getGoalColumns($goalId);
+            $metricsToSum = Goals::getGoalColumns($goalId);
             unset($metricsToSum[array_search('conversion_rate', $metricsToSum)]);
             foreach ($metricsToSum as $metricName) {
                 $fieldsToSum[] = self::getRecordName($metricName, $goalId);
@@ -412,13 +421,13 @@ class Piwik_Goals_Archiver extends Piwik_PluginsArchiver
 
             // sum up the visits to conversion data table & the days to conversion data table
             $this->getProcessor()->aggregateDataTableReports(array(
-                                                         self::getRecordName(self::VISITS_UNTIL_RECORD_NAME, $goalId),
-                                                         self::getRecordName(self::DAYS_UNTIL_CONV_RECORD_NAME, $goalId)));
+                                                                  self::getRecordName(self::VISITS_UNTIL_RECORD_NAME, $goalId),
+                                                                  self::getRecordName(self::DAYS_UNTIL_CONV_RECORD_NAME, $goalId)));
         }
 
         // sum up goal overview reports
         $this->getProcessor()->aggregateDataTableReports(array(
-                                                     self::getRecordName(self::VISITS_UNTIL_RECORD_NAME),
-                                                     self::getRecordName(self::DAYS_UNTIL_CONV_RECORD_NAME)));
+                                                              self::getRecordName(self::VISITS_UNTIL_RECORD_NAME),
+                                                              self::getRecordName(self::DAYS_UNTIL_CONV_RECORD_NAME)));
     }
 }

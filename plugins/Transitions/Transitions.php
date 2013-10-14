@@ -6,44 +6,41 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_Transitions
+ * @package Transitions
  */
+
+namespace Piwik\Plugins\Transitions;
 
 /**
- * @package Piwik_Transitions
+ * @package Transitions
  */
-class Piwik_Transitions extends Piwik_Plugin
+class Transitions extends \Piwik\Plugin
 {
-
-    public function getInformation()
+    /**
+     * @see Piwik_Plugin::getListHooksRegistered
+     */
+    public function getListHooksRegistered()
     {
         return array(
-            'description'     => Piwik_Translate('Transitions_PluginDescription'),
-            'author'          => 'Piwik',
-            'author_homepage' => 'http://piwik.org/',
-            'version'         => Piwik_Version::VERSION,
+            'AssetManager.getStylesheetFiles'        => 'getStylesheetFiles',
+            'AssetManager.getJavaScriptFiles'        => 'getJsFiles',
+            'Translate.getClientSideTranslationKeys' => 'getClientSideTranslationKeys'
         );
     }
 
-    function getListHooksRegistered()
+    public function getStylesheetFiles(&$stylesheets)
     {
-        return array(
-            'AssetManager.getCssFiles' => 'getCssFiles',
-            'AssetManager.getJsFiles'  => 'getJsFiles'
-        );
+        $stylesheets[] = 'plugins/Transitions/stylesheets/transitions.less';
     }
 
-    public function getCssFiles($notification)
+    public function getJsFiles(&$jsFiles)
     {
-        $cssFiles = & $notification->getNotificationObject();
-        $cssFiles[] = 'plugins/Transitions/templates/transitions.css';
+        $jsFiles[] = 'plugins/Transitions/javascripts/transitions.js';
     }
 
-    public function getJsFiles($notification)
+    public function getClientSideTranslationKeys(&$translationKeys)
     {
-        $jsFiles = & $notification->getNotificationObject();
-        $jsFiles[] = 'plugins/Transitions/templates/transitions.js';
+        $translationKeys[] = 'General_TransitionsRowActionTooltipTitle';
+        $translationKeys[] = 'General_TransitionsRowActionTooltip';
     }
-
-
 }

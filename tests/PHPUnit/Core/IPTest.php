@@ -1,4 +1,9 @@
 <?php
+use Piwik\Common;
+use Piwik\Config;
+use Piwik\IP;
+use Piwik\SettingsServer;
+
 /**
  * Piwik - Open source web analytics
  *
@@ -57,7 +62,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testSanitizeIp($ip, $expected)
     {
-        $this->assertEquals($expected, Piwik_IP::sanitizeIp($ip));
+        $this->assertEquals($expected, IP::sanitizeIp($ip));
     }
 
     /**
@@ -98,7 +103,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testSanitizeIpRange($ip, $expected)
     {
-        $this->assertEquals($expected, Piwik_IP::sanitizeIpRange($ip));
+        $this->assertEquals($expected, IP::sanitizeIpRange($ip));
     }
 
     /**
@@ -129,7 +134,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testP2N($P, $N)
     {
-        $this->assertEquals($N, Piwik_IP::P2N($P));
+        $this->assertEquals($N, IP::P2N($P));
     }
 
     /**
@@ -166,7 +171,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testP2NInvalidInput($P)
     {
-        $this->assertEquals("\x00\x00\x00\x00", Piwik_IP::P2N($P));
+        $this->assertEquals("\x00\x00\x00\x00", IP::P2N($P));
     }
 
     /**
@@ -206,7 +211,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testN2P($P, $N)
     {
-        $this->assertEquals($P, Piwik_IP::N2P($N), "$P vs" . Piwik_IP::N2P($N));
+        $this->assertEquals($P, IP::N2P($N), "$P vs" . IP::N2P($N));
     }
 
     /**
@@ -216,7 +221,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testN2PinvalidInput($N)
     {
-        $this->assertEquals("0.0.0.0", Piwik_IP::N2P($N), bin2hex($N));
+        $this->assertEquals("0.0.0.0", IP::N2P($N), bin2hex($N));
     }
 
     /**
@@ -226,7 +231,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testPrettyPrint($P, $N)
     {
-        $this->assertEquals($P, Piwik_IP::prettyPrint($N), "$P vs" . Piwik_IP::N2P($N));
+        $this->assertEquals($P, IP::prettyPrint($N), "$P vs" . IP::N2P($N));
     }
 
     /**
@@ -236,7 +241,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testPrettyPrintInvalidInput($N)
     {
-        $this->assertEquals("0.0.0.0", Piwik_IP::prettyPrint($N), bin2hex($N));
+        $this->assertEquals("0.0.0.0", IP::prettyPrint($N), bin2hex($N));
     }
 
     /**
@@ -295,7 +300,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testIsIPv4($ip, $bool)
     {
-        $this->assertEquals($bool, Piwik_IP::isIPv4($ip), bin2hex($ip));
+        $this->assertEquals($bool, IP::isIPv4($ip), bin2hex($ip));
     }
 
     /**
@@ -352,9 +357,9 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testLong2ip($N, $P)
     {
-        $this->assertEquals($P, Piwik_IP::long2ip($N), bin2hex($N));
+        $this->assertEquals($P, IP::long2ip($N), bin2hex($N));
         // this is our compatibility function
-        $this->assertEquals($P, Piwik_Common::long2ip($N), bin2hex($N));
+        $this->assertEquals($P, Common::long2ip($N), bin2hex($N));
     }
 
     /**
@@ -444,7 +449,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testGetIpsForRange($range, $expected)
     {
-        $this->assertEquals($expected, Piwik_IP::getIpsForRange($range));
+        $this->assertEquals($expected, IP::getIpsForRange($range));
     }
 
     /**
@@ -546,13 +551,13 @@ class IPTest extends PHPUnit_Framework_TestCase
     {
         foreach ($test as $ip => $expected) {
             // range as a string
-            $this->assertEquals($expected, Piwik_IP::isIpInRange(Piwik_IP::P2N($ip), array($range)), "$ip in $range");
+            $this->assertEquals($expected, IP::isIpInRange(IP::P2N($ip), array($range)), "$ip in $range");
 
             // range as an array(low, high)
-            $aRange = Piwik_IP::getIpsForRange($range);
-            $aRange[0] = Piwik_IP::N2P($aRange[0]);
-            $aRange[1] = Piwik_IP::N2P($aRange[1]);
-            $this->assertEquals($expected, Piwik_IP::isIpInRange(Piwik_IP::P2N($ip), array($aRange)), "$ip in $range");
+            $aRange = IP::getIpsForRange($range);
+            $aRange[0] = IP::N2P($aRange[0]);
+            $aRange[1] = IP::N2P($aRange[1]);
+            $this->assertEquals($expected, IP::isIpInRange(IP::P2N($ip), array($aRange)), "$ip in $range");
         }
     }
 
@@ -580,14 +585,13 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testGetIpFromHeader($description, $test)
     {
-        Piwik::createConfigObject();
-        Piwik_Config::getInstance()->setTestEnvironment();
+        Config::getInstance()->setTestEnvironment();
 
         $_SERVER['REMOTE_ADDR'] = $test[0];
         $_SERVER['HTTP_X_FORWARDED_FOR'] = $test[1];
-        Piwik_Config::getInstance()->General['proxy_client_headers'] = array($test[2]);
-        Piwik_Config::getInstance()->General['proxy_ips'] = array($test[3]);
-        $this->assertEquals($test[4], Piwik_IP::getIpFromHeader(), $description);
+        Config::getInstance()->General['proxy_client_headers'] = array($test[2]);
+        Config::getInstance()->General['proxy_ips'] = array($test[3]);
+        $this->assertEquals($test[4], IP::getIpFromHeader(), $description);
     }
 
     /**
@@ -614,7 +618,7 @@ class IPTest extends PHPUnit_Framework_TestCase
      */
     public function testGetNonProxyIpFromHeader($ip)
     {
-        $this->assertEquals($ip, Piwik_IP::getNonProxyIpFromHeader($ip, array()));
+        $this->assertEquals($ip, IP::getNonProxyIpFromHeader($ip, array()));
     }
 
     /**
@@ -627,7 +631,7 @@ class IPTest extends PHPUnit_Framework_TestCase
         // 1.1.1.1 is not a trusted proxy
         $_SERVER['REMOTE_ADDR'] = '1.1.1.1';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '';
-        $this->assertEquals('1.1.1.1', Piwik_IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
+        $this->assertEquals('1.1.1.1', IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
     }
 
     /**
@@ -641,14 +645,14 @@ class IPTest extends PHPUnit_Framework_TestCase
         $_SERVER['REMOTE_ADDR'] = '1.1.1.1';
 
         $_SERVER['HTTP_X_FORWARDED_FOR'] = $ip;
-        $this->assertEquals($ip, Piwik_IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
+        $this->assertEquals($ip, IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
 
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '1.2.3.4, ' . $ip;
-        $this->assertEquals($ip, Piwik_IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
+        $this->assertEquals($ip, IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
 
         // misconfiguration
         $_SERVER['HTTP_X_FORWARDED_FOR'] = $ip . ', 1.1.1.1';
-        $this->assertEquals($ip, Piwik_IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
+        $this->assertEquals($ip, IP::getNonProxyIpFromHeader('1.1.1.1', array('HTTP_X_FORWARDED_FOR')));
     }
 
     /**
@@ -674,10 +678,10 @@ class IPTest extends PHPUnit_Framework_TestCase
     public function testGetLastIpFromList($csv, $expected)
     {
         // without excluded IPs
-        $this->assertEquals($expected, Piwik_IP::getLastIpFromList($csv));
+        $this->assertEquals($expected, IP::getLastIpFromList($csv));
 
         // with excluded Ips
-        $this->assertEquals($expected, Piwik_IP::getLastIpFromList($csv . ', 10.10.10.10', array('10.10.10.10')));
+        $this->assertEquals($expected, IP::getLastIpFromList($csv . ', 10.10.10.10', array('10.10.10.10')));
     }
 
     /**
@@ -687,124 +691,12 @@ class IPTest extends PHPUnit_Framework_TestCase
     public function testGetHostByAddr()
     {
         $hosts = array('localhost', 'localhost.localdomain', strtolower(@php_uname('n')), '127.0.0.1');
-        $this->assertTrue(in_array(strtolower(Piwik_IP::getHostByAddr('127.0.0.1')), $hosts), '127.0.0.1 -> localhost');
+        $host = IP::getHostByAddr('127.0.0.1');
+        $this->assertTrue(in_array(strtolower($host), $hosts), $host . ' -> localhost');
 
-        if (!Piwik_Common::isWindows() || PHP_VERSION >= '5.3') {
+        if (!SettingsServer::isWindows() || PHP_VERSION >= '5.3') {
             $hosts = array('ip6-localhost', 'localhost', 'localhost.localdomain', strtolower(@php_uname('n')), '::1');
-            $this->assertTrue(in_array(strtolower(Piwik_IP::getHostByAddr('::1')), $hosts), '::1 -> ip6-localhost');
-        }
-    }
-
-    /**
-     * Dataprovider for testPhpCompatInetNtop
-     */
-    public function getInetNtopData()
-    {
-        return array(
-            array('127.0.0.1', '7f000001'),
-            array('192.232.131.222', 'c0e883de'),
-            array('255.0.0.0', 'ff000000'),
-            array('255.255.255.255', 'ffffffff'),
-            array('::1', '00000000000000000000000000000001'),
-            array('::101', '00000000000000000000000000000101'),
-            array('::0.1.1.1', '00000000000000000000000000010101'),
-            array('2001:260:0:10::1', '20010260000000100000000000000001'),
-            array('2001:0:0:260::1', '20010000000002600000000000000001'),
-            array('2001::260:0:0:10:1', '20010000000002600000000000100001'),
-            array('2001:5c0:1000:b::90f8', '200105c01000000b00000000000090f8'),
-            array('fe80::200:4cff:fe43:172f', 'fe8000000000000002004cfffe43172f'),
-            array('::ffff:127.0.0.1', '00000000000000000000ffff7f000001'),
-            array('::127.0.0.1', '0000000000000000000000007f000001'),
-            array('::fff0:7f00:1', '00000000000000000000fff07f000001'),
-        );
-    }
-
-    /**
-     * @group Core
-     * @group IP
-     * @dataProvider getInetNtopData
-     */
-    public function testPhpCompatInetNtop($k, $v)
-    {
-        $this->assertEquals($k, php_compat_inet_ntop(pack('H*', $v)));
-        if (!Piwik_Common::isWindows()) {
-            $this->assertEquals($k, @inet_ntop(pack('H*', $v)));
-        }
-    }
-
-    /**
-     * Dataprovider for testPhpCompatInetPton
-     * @return array
-     */
-    public function getInetPtonTestData()
-    {
-        return array(
-            array('127.0.0.1', '7f000001'),
-            array('192.232.131.222', 'c0e883de'),
-            array('255.0.0.0', 'ff000000'),
-            array('255.255.255.255', 'ffffffff'),
-            array('::', '00000000000000000000000000000000'),
-            array('::0', '00000000000000000000000000000000'),
-            array('0::', '00000000000000000000000000000000'),
-            array('0::0', '00000000000000000000000000000000'),
-            array('::1', '00000000000000000000000000000001'),
-            array('2001:260:0:10::1', '20010260000000100000000000000001'),
-            array('2001:5c0:1000:b::90f8', '200105c01000000b00000000000090f8'),
-            array('fe80::200:4cff:fe43:172f', 'fe8000000000000002004cfffe43172f'),
-            array('::ffff:127.0.0.1', '00000000000000000000ffff7f000001'),
-            array('::127.0.0.1', '0000000000000000000000007f000001'),
-
-            // relaxed rules
-            array('00000::', '00000000000000000000000000000000'),
-            array('1:2:3:4:5:ffff:127.0.0.1', '00010002000300040005ffff7f000001'),
-
-            // invalid input
-            array(null, false),
-            array(false, false),
-            array(true, false),
-            array('', false),
-            array('0', false),
-            array('07.07.07.07', false),
-            array('1.', false),
-            array('.1', false),
-            array('1.1', false),
-            array('.1.1.', false),
-            array('1.1.1.', false),
-            array('.1.1.1', false),
-            array('1.2.3.4.', false),
-            array('.1.2.3.4', false),
-            array('1.2.3.256', false),
-            array('a.b.c.d', false),
-            array('::1::', false),
-            array('1:2:3:4:::5:6', false),
-            array('1:2:3:4:5:6:', false),
-            array(':1:2:3:4:5:6', false),
-            array('1:2:3:4:5:6:7:', false),
-            array(':1:2:3:4:5:6:7', false),
-            array('::11111:0', false),
-            array('::g', false),
-            array('::ffff:127.00.0.1', false),
-            array('::ffff:127.0.0.01', false),
-            array('::ffff:256.0.0.1', false),
-            array('::ffff:1.256.0.1', false),
-            array('::ffff:65536.0.0.1', false),
-            array('::ffff:256.65536.0.1', false),
-            array('::ffff:65536.65536.0.1', false),
-            array('::ffff:7f01:0.1', false),
-            array('ffff:127.0.0.1:ffff::', false),
-        );
-    }
-
-    /**
-     * @group Core
-     * @group IP
-     * @dataProvider getInetPtonTestData
-     */
-    public function testPhpCompatInetPton($k, $v)
-    {
-        $this->assertEquals($v, bin2hex(php_compat_inet_pton($k)));
-        if (!Piwik_Common::isWindows()) {
-            $this->assertEquals($v, bin2hex(@inet_pton($k)));
+            $this->assertTrue(in_array(strtolower(IP::getHostByAddr('::1')), $hosts), '::1 -> ip6-localhost');
         }
     }
 }

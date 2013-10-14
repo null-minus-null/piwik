@@ -8,7 +8,7 @@
 		<module>VisitTime</module>
 		<action>getVisitInformationPerServerTime</action>
 		<dimension>Server time</dimension>
-		<documentation>This graph shows what time it was in the &lt;b&gt; server's time zone &lt;/b&gt; during the visits.</documentation>
+		<documentation>This graph shows what time it was in the &lt;strong&gt; server's time zone &lt;/strong&gt; during the visits.</documentation>
 		<constantRowsCount>1</constantRowsCount>
 		<metrics>
 			<nb_visits>Visits</nb_visits>
@@ -78,7 +78,7 @@
 			<nb_uniq_visitors>1</nb_uniq_visitors>
 			<nb_visits>1</nb_visits>
 			<nb_actions>6</nb_actions>
-			<revenue>$ 3111.11</revenue>
+			<revenue>$ 3111</revenue>
 			<nb_actions_per_visit>6</nb_actions_per_visit>
 			<avg_time_on_site>01:06:01</avg_time_on_site>
 			<bounce_rate>0%</bounce_rate>

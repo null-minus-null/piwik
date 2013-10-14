@@ -6,12 +6,25 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_UserSettings
+ * @package UserSettings
  */
+
+namespace Piwik\Plugins\UserSettings;
+
+use Piwik\Common;
+use Piwik\DataAccess\LogAggregator;
+use Piwik\DataArray;
+use Piwik\DataTable;
+use Piwik\Metrics;
 
 require_once PIWIK_INCLUDE_PATH . '/plugins/UserSettings/functions.php';
 
-class Piwik_UserSettings_Archiver extends Piwik_PluginsArchiver
+/**
+ * Archiver for UserSettings Plugin
+ *
+ * @see PluginsArchiver
+ */
+class Archiver extends \Piwik\Plugin\Archiver
 {
     const LANGUAGE_RECORD_NAME = 'UserSettings_language';
     const PLUGIN_RECORD_NAME = 'UserSettings_plugin';
@@ -66,9 +79,9 @@ class Piwik_UserSettings_Archiver extends Piwik_PluginsArchiver
         return $tableBrowser;
     }
 
-    protected function aggregateByBrowserType(Piwik_DataTable $tableBrowser)
+    protected function aggregateByBrowserType(DataTable $tableBrowser)
     {
-        $tableBrowser->filter('GroupBy', array('label', 'Piwik_getBrowserFamily'));
+        $tableBrowser->filter('GroupBy', array('label', __NAMESPACE__ . '\getBrowserFamily'));
         $this->insertTable(self::BROWSER_TYPE_RECORD_NAME, $tableBrowser);
     }
 
@@ -82,14 +95,14 @@ class Piwik_UserSettings_Archiver extends Piwik_PluginsArchiver
     {
         $metrics = $this->getProcessor()->getMetricsForDimension(self::RESOLUTION_DIMENSION);
         $table = $this->getProcessor()->getDataTableFromDataArray($metrics);
-        $table->filter('ColumnCallbackDeleteRow', array('label', 'Piwik_UserSettings_keepStrlenGreater'));
+        $table->filter('ColumnCallbackDeleteRow', array('label', __NAMESPACE__ . '\keepStrlenGreater'));
         $this->insertTable(self::RESOLUTION_RECORD_NAME, $table);
         return $table;
     }
 
-    protected function aggregateByScreenType(Piwik_DataTable $resolutions)
+    protected function aggregateByScreenType(DataTable $resolutions)
     {
-        $resolutions->filter('GroupBy', array('label', 'Piwik_getScreenTypeFromResolution'));
+        $resolutions->filter('GroupBy', array('label', __NAMESPACE__ . '\getScreenTypeFromResolution'));
         $this->insertTable(self::SCREEN_TYPE_RECORD_NAME, $resolutions);
     }
 
@@ -110,18 +123,18 @@ class Piwik_UserSettings_Archiver extends Piwik_PluginsArchiver
 
         $query = $this->getLogAggregator()->queryVisitsByDimension(array(), false, $selects, $metrics = array());
         $data = $query->fetch();
-        $cleanRow = Piwik_DataAccess_LogAggregator::makeArrayOneColumn($data, Piwik_Metrics::INDEX_NB_VISITS);
-        $table = Piwik_DataTable::makeFromIndexedArray($cleanRow);
+        $cleanRow = LogAggregator::makeArrayOneColumn($data, Metrics::INDEX_NB_VISITS);
+        $table = DataTable::makeFromIndexedArray($cleanRow);
         $this->insertTable(self::PLUGIN_RECORD_NAME, $table);
     }
 
     protected function aggregateByLanguage()
     {
-        $query = $this->getLogAggregator()->queryVisitsByDimension( array("label" => self::LANGUAGE_DIMENSION) );
-        $languageCodes = array_keys(Piwik_Common::getLanguagesList());
-        $metricsByLanguage = new Piwik_DataArray();
+        $query = $this->getLogAggregator()->queryVisitsByDimension(array("label" => self::LANGUAGE_DIMENSION));
+        $languageCodes = array_keys(Common::getLanguagesList());
+        $metricsByLanguage = new DataArray();
         while ($row = $query->fetch()) {
-            $code = Piwik_Common::extractLanguageCodeFromBrowserLanguage($row['label'], $languageCodes);
+            $code = Common::extractLanguageCodeFromBrowserLanguage($row['label'], $languageCodes);
             $metricsByLanguage->sumMetricsVisits($code, $row);
         }
 
@@ -129,9 +142,9 @@ class Piwik_UserSettings_Archiver extends Piwik_PluginsArchiver
         $this->insertTable(self::LANGUAGE_RECORD_NAME, $tableLanguage);
     }
 
-    protected function insertTable($recordName, Piwik_DataTable $table)
+    protected function insertTable($recordName, DataTable $table)
     {
-        return $this->getProcessor()->insertBlobRecord($recordName, $table->getSerialized($this->maximumRows, null, Piwik_Metrics::INDEX_NB_VISITS));
+        return $this->getProcessor()->insertBlobRecord($recordName, $table->getSerialized($this->maximumRows, null, Metrics::INDEX_NB_VISITS));
     }
 
     public function archivePeriod()

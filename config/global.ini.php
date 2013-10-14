@@ -47,7 +47,7 @@ always_archive_data_range = 0;
 
 ; if set to 1, all the SQL queries will be recorded by the profiler
 ; and a profiling summary will be printed at the end of the request
-; NOTE: you must also set [log] logger_message[] = "screen" to enable the profiler to print on screen
+; NOTE: you must also set [log] log_writers[] = "screen" to enable the profiler to print on screen
 enable_sql_profiler = 0
 
 ; if set to 1, a Piwik tracking code will be included in the Piwik UI footer and will track visits, pages, etc. to idsite = 1
@@ -143,10 +143,6 @@ time_before_today_archive_considered_outdated = 10
 ; to trigger the Piwik archiving process.
 enable_browser_archiving_triggering = 1
 
-; If set to 1, nested reports will be archived with parent references in the datatables
-; At the moment, this is not needed in core but it can be handy for plugins
-enable_archive_parents_of_datatable = 0
-
 ; By default Piwik runs OPTIMIZE TABLE SQL queries to free spaces after deleting some data.
 ; If your Piwik tracks millions of pages, the OPTIMIZE TABLE queries might run for hours (seen in "SHOW FULL PROCESSLIST \g")
 ; so you can disable these special queries here:
@@ -227,10 +223,10 @@ noreply_email_address = "noreply@{DOMAIN}"
 feedback_email_address = "hello@piwik.org"
 
 ; during archiving, Piwik will limit the number of results recorded, for performance reasons
-; maximum number of rows for any of the Referers tables (keywords, search engines, campaigns, etc.)
-datatable_archiving_maximum_rows_referers = 1000
-; maximum number of rows for any of the Referers subtable (search engines by keyword, keyword by campaign, etc.)
-datatable_archiving_maximum_rows_subtable_referers = 50
+; maximum number of rows for any of the Referrers tables (keywords, search engines, campaigns, etc.)
+datatable_archiving_maximum_rows_referrers = 1000
+; maximum number of rows for any of the Referrers subtable (search engines by keyword, keyword by campaign, etc.)
+datatable_archiving_maximum_rows_subtable_referrers = 50
 
 ; maximum number of rows for the Custom Variables names report
 datatable_archiving_maximum_rows_custom_variables = 1000
@@ -240,7 +236,7 @@ datatable_archiving_maximum_rows_subtable_custom_variables = 1000
 ; maximum number of rows for any of the Actions tables (pages, downloads, outlinks)
 datatable_archiving_maximum_rows_actions = 500
 ; maximum number of rows for pages in categories (sub pages, when clicking on the + for a page category)
-; note: should not exceed the display limit in Piwik_Actions_Controller::ACTIONS_REPORT_ROWS_DISPLAY
+; note: should not exceed the display limit in Piwik\Actions\Controller::ACTIONS_REPORT_ROWS_DISPLAY
 ; because each subdirectory doesn't have paging at the bottom, so all data should be displayed if possible.
 datatable_archiving_maximum_rows_subtable_actions = 100
 
@@ -267,14 +263,6 @@ live_widget_visitor_count_last_minutes = 3
 ; In "All Websites" dashboard, when looking at today's reports (or a date range including today),
 ; the page will automatically refresh every 5 minutes. Set to 0 to disable automatic refresh
 multisites_refresh_after_seconds = 300
-
-; by default, Piwik uses self-hosted AJAX libraries.
-; If set to 1, Piwik uses a Content Distribution Network
-use_ajax_cdn = 0
-
-; required AJAX library versions
-jquery_version = 1.10.1
-jqueryui_version = 1.10.3
 
 ; Set to 1 if you're using https on your Piwik server and Piwik can't detect it,
 ; e.g., a reverse proxy using https-to-http, or a web server that doesn't
@@ -400,13 +388,13 @@ scheduled_tasks_min_interval = 3600
 ignore_visits_cookie_name = piwik_ignore
 
 ; Comma separated list of variable names that will be read to define a Campaign name, for example CPC campaign
-; Example: If a visitor first visits 'index.php?piwik_campaign=Adwords-CPC' then it will be counted as a campaign referer named 'Adwords-CPC'
+; Example: If a visitor first visits 'index.php?piwik_campaign=Adwords-CPC' then it will be counted as a campaign referrer named 'Adwords-CPC'
 ; Includes by default the GA style campaign parameters
 campaign_var_name = "pk_campaign,piwik_campaign,utm_campaign,utm_source,utm_medium"
 
 ; Comma separated list of variable names that will be read to track a Campaign Keyword
 ; Example: If a visitor first visits 'index.php?piwik_campaign=Adwords-CPC&piwik_kwd=My killer keyword' ;
-; then it will be counted as a campaign referer named 'Adwords-CPC' with the keyword 'My killer keyword'
+; then it will be counted as a campaign referrer named 'Adwords-CPC' with the keyword 'My killer keyword'
 ; Includes by default the GA style campaign keyword parameter utm_term
 campaign_keyword_var_name = "pk_kwd,piwik_kwd,utm_term"
 
@@ -419,8 +407,9 @@ page_maximum_length = 1024;
 action_sitesearch_record_url = 0
 
 ; Anonymize a visitor's IP address after testing for "Ip exclude"
-; This value is the number of octets in IP address to mask; if the AnonymizeIP plugin is deactivated, this value is ignored.
-; For IPv4 addresses, valid values are 0..4; for IPv6 addresses, valid values are 0..16
+; This value is the level of anonymization Piwik will use; if the AnonymizeIP plugin is deactivated, this value is ignored.
+; For IPv4/IPv6 addresses, valid values are the number of octets in IP address to mask (from 0 to 4).
+; For IPv6 addresses 0..4 means that 0, 64, 80, 104 or all bits are masked.
 ip_address_mask_length = 1
 
 ; Tracker cache files are the simple caching layer for Tracking.
@@ -480,11 +469,13 @@ username = ; Proxy username: optional; if specified, password is mandatory
 password = ; Proxy password: optional; if specified, username is mandatory
 
 [log]
-;possible values for log: screen, database, file
-; by default, standard logging/debug messages are hidden from screen
-;logger_message[] = screen
-logger_error[] = screen
-logger_exception[] = screen
+; possible values for log: screen, database, file
+log_writers[] = file
+
+; log level, everything logged w/ this level or one of greater severity
+; will be logged. everything else will be ignored. possible values are:
+; NONE, ERROR, WARN, INFO, DEBUG, VERBOSE
+log_level = WARN
 
 ; if set to 1, only requests done in CLI mode (eg. the archive.php cron run) will be logged
 ; NOTE: log_only_when_debug_parameter will also be checked for
@@ -498,29 +489,11 @@ log_only_when_debug_parameter = 0
 ; eg. if the value is tmp/logs files will be created in /path/to/piwik/tmp/logs/
 logger_file_path = tmp/logs
 
-; all calls to the API (method name, parameters, execution time, caller IP, etc.)
-; disabled by default as it can cause serious overhead and should only be used wisely
-;logger_api_call[] = file
-
-[smarty]
-; the list of directories in which to look for templates
-template_dir[] = plugins
-template_dir[] = themes/default
-template_dir[] = themes
-
-plugins_dir[] = core/SmartyPlugins
-plugins_dir[] = libs/Smarty/plugins
-
-compile_dir = tmp/templates_c
-cache_dir = tmp/cache
-
-; error reporting inside Smarty
-error_reporting = E_ALL|E_NOTICE
-
 [Plugins]
 Plugins[] = CorePluginsAdmin
 Plugins[] = CoreAdminHome
 Plugins[] = CoreHome
+Plugins[] = CoreVisualizations
 Plugins[] = Proxy
 Plugins[] = API
 Plugins[] = Widgetize
@@ -529,7 +502,7 @@ Plugins[] = LanguagesManager
 Plugins[] = Actions
 Plugins[] = Dashboard
 Plugins[] = MultiSites
-Plugins[] = Referers
+Plugins[] = Referrers
 Plugins[] = UserSettings
 Plugins[] = Goals
 Plugins[] = SEO
@@ -550,7 +523,7 @@ Plugins[] = UsersManager
 Plugins[] = SitesManager
 Plugins[] = Installation
 Plugins[] = CoreUpdater
-Plugins[] = PDFReports
+Plugins[] = ScheduledReports
 Plugins[] = UserCountryMap
 Plugins[] = Live
 Plugins[] = CustomVariables

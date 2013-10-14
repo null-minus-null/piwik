@@ -6,10 +6,14 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_DevicesDetection
+ * @package DevicesDetection
  */
 
-class Piwik_DevicesDetection_Archiver extends Piwik_PluginsArchiver
+namespace Piwik\Plugins\DevicesDetection;
+
+use Piwik\Metrics;
+
+class Archiver extends \Piwik\Plugin\Archiver
 {
     const DEVICE_TYPE_RECORD_NAME = 'DevicesDetection_types';
     const DEVICE_BRAND_RECORD_NAME = 'DevicesDetection_brands';
@@ -29,20 +33,20 @@ class Piwik_DevicesDetection_Archiver extends Piwik_PluginsArchiver
 
     public function archiveDay()
     {
-        $this->aggregateByLabel( self::DEVICE_TYPE_FIELD, self::DEVICE_TYPE_RECORD_NAME);
-        $this->aggregateByLabel( self::DEVICE_BRAND_FIELD, self::DEVICE_BRAND_RECORD_NAME);
-        $this->aggregateByLabel( self::DEVICE_MODEL_FIELD, self::DEVICE_MODEL_RECORD_NAME);
-        $this->aggregateByLabel( self::OS_FIELD, self::OS_RECORD_NAME);
-        $this->aggregateByLabel( self::OS_VERSION_FIELD, self::OS_VERSION_RECORD_NAME);
-        $this->aggregateByLabel( self::BROWSER_FIELD, self::BROWSER_RECORD_NAME);
-        $this->aggregateByLabel( self::BROWSER_VERSION_DIMENSION, self::BROWSER_VERSION_RECORD_NAME);
+        $this->aggregateByLabel(self::DEVICE_TYPE_FIELD, self::DEVICE_TYPE_RECORD_NAME);
+        $this->aggregateByLabel(self::DEVICE_BRAND_FIELD, self::DEVICE_BRAND_RECORD_NAME);
+        $this->aggregateByLabel(self::DEVICE_MODEL_FIELD, self::DEVICE_MODEL_RECORD_NAME);
+        $this->aggregateByLabel(self::OS_FIELD, self::OS_RECORD_NAME);
+        $this->aggregateByLabel(self::OS_VERSION_FIELD, self::OS_VERSION_RECORD_NAME);
+        $this->aggregateByLabel(self::BROWSER_FIELD, self::BROWSER_RECORD_NAME);
+        $this->aggregateByLabel(self::BROWSER_VERSION_DIMENSION, self::BROWSER_VERSION_RECORD_NAME);
     }
 
-    private function aggregateByLabel( $labelSQL, $recordName)
+    private function aggregateByLabel($labelSQL, $recordName)
     {
         $metrics = $this->getProcessor()->getMetricsForDimension($labelSQL);
         $table = $this->getProcessor()->getDataTableFromDataArray($metrics);
-        $this->getProcessor()->insertBlobRecord($recordName, $table->getSerialized($this->maximumRows, null, Piwik_Metrics::INDEX_NB_VISITS));
+        $this->getProcessor()->insertBlobRecord($recordName, $table->getSerialized($this->maximumRows, null, Metrics::INDEX_NB_VISITS));
     }
 
     public function archivePeriod()

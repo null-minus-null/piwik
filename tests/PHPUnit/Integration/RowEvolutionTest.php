@@ -39,7 +39,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
             'otherRequestParameters' => array(
                 'date'      => '2010-02-06,2010-03-06',
                 'period'    => 'day',
-                'apiModule' => 'Referers',
+                'apiModule' => 'Referrers',
                 'apiAction' => 'getWebsites',
                 'label'     => 'www.referrer2.com',
                 'expanded'  => 0
@@ -143,7 +143,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
             'otherRequestParameters' => array(
                 'date'      => '2010-02-01,2010-04-08',
                 'period'    => 'month',
-                'apiModule' => 'Referers',
+                'apiModule' => 'Referrers',
                 'apiAction' => 'getKeywords',
                 // no label
             )
@@ -163,6 +163,21 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
                 'label'     => 'Firefox,Chrome,Opera'
             )
         ));
+
+        // test Row Evolution on Desktop VS Mobile, special "view" report
+        $return[] = array('API.getRowEvolution', array(
+            'testSuffix'             => '_mobileDesktop',
+            'periods'                => 'day',
+            'idSite'                 => $idSite2,
+            'date'                   => $today,
+            'otherRequestParameters' => array(
+                'date'      => '2010-03-01,2010-03-06',
+                'period'    => 'month',
+                'apiModule' => 'UserSettings',
+                'apiAction' => 'getMobileVsDesktop',
+                'label'     => 'Desktop,Mobile'
+            )
+        ));
         
         // test multi row evolution w/ filter_limit to limit all available labels
         $return[] = array('API.getRowEvolution', array(
@@ -173,7 +188,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
             'otherRequestParameters' => array(
                 'date'         => '2010-03-01,2010-03-06',
                 'period'       => 'day',
-                'apiModule'    => 'Referers',
+                'apiModule'    => 'Referrers',
                 'apiAction'    => 'getWebsites',
                 'filter_limit' => 3, // only 3 labels should show up
             )
@@ -188,7 +203,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
             'otherRequestParameters' => array(
                 'date'      => '2010-04-01,2010-04-06',
                 'period'    => 'day',
-                'apiModule' => 'Referers',
+                'apiModule' => 'Referrers',
                 'apiAction' => 'getWebsites',
                 // no label
             )
@@ -196,7 +211,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
         
         // (non-rowevolution test) test flattener w/ search engines to make sure
         // queued filters are not applied twice
-        $return[] = array('Referers.getSearchEngines', array(
+        $return[] = array('Referrers.getSearchEngines', array(
             'testSuffix'             => '_flatFilters',
             'periods'                => 'month',
             'idSite'                 => $idSite,
@@ -210,7 +225,7 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
         return $return;
     }
 
-    public function getOutputPrefix()
+    public static function getOutputPrefix()
     {
         return 'RowEvolution';
     }
@@ -218,4 +233,3 @@ class Test_Piwik_Integration_RowEvolution extends IntegrationTestCase
 
 Test_Piwik_Integration_RowEvolution::$fixture
     = new Test_Piwik_Fixture_TwoSitesManyVisitsOverSeveralDaysWithSearchEngineReferrers();
-

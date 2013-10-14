@@ -6,8 +6,13 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_DBStats
+ * @package DBStats
  */
+namespace Piwik\Plugins\DBStats;
+
+use Piwik\Common;
+use Piwik\DataTable;
+use Piwik\Piwik;
 
 /**
  * @see plugins/DBStats/MySQLMetadataProvider.php
@@ -17,24 +22,10 @@ require_once PIWIK_INCLUDE_PATH . '/plugins/DBStats/MySQLMetadataProvider.php';
 /**
  * DBStats API is used to request the overall status of the Mysql tables in use by Piwik.
  *
- * @package Piwik_DBStats
+ * @package DBStats
  */
-class Piwik_DBStats_API
+class API extends \Piwik\Plugin\API
 {
-    /** Singleton instance of this class. */
-    static private $instance = null;
-
-    /**
-     * Gets or creates the DBStats API singleton.
-     */
-    static public function getInstance()
-    {
-        if (self::$instance == null) {
-            self::$instance = new self;
-        }
-        return self::$instance;
-    }
-
     /**
      * The MySQLMetadataProvider instance that fetches table/db status information.
      */
@@ -43,9 +34,9 @@ class Piwik_DBStats_API
     /**
      * Constructor.
      */
-    public function __construct()
+    protected function __construct()
     {
-        $this->metadataProvider = new Piwik_DBStats_MySQLMetadataProvider();
+        $this->metadataProvider = new MySQLMetadataProvider();
     }
 
     /**
@@ -54,7 +45,7 @@ class Piwik_DBStats_API
     public function resetTableStatuses()
     {
         Piwik::checkUserIsSuperUser();
-        self::getInstance()->metadataProvider = new Piwik_DBStats_MySQLMetadataProvider();
+        self::getInstance()->metadataProvider = new MySQLMetadataProvider();
     }
 
     /**
@@ -98,7 +89,7 @@ class Piwik_DBStats_API
      * This function will group tracker tables, numeric archive tables, blob archive tables
      * and other tables together so only four rows are shown.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getDatabaseUsageSummary()
     {
@@ -128,13 +119,13 @@ class Piwik_DBStats_API
             $rowToAddTo['row_count'] += $status['Rows'];
         }
 
-        return Piwik_DataTable::makeFromIndexedArray($rows);
+        return DataTable::makeFromIndexedArray($rows);
     }
 
     /**
      * Returns a datatable describing how much space is taken up by each log table.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getTrackerDataSummary()
     {
@@ -146,7 +137,7 @@ class Piwik_DBStats_API
      * Returns a datatable describing how much space is taken up by each numeric
      * archive table.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getMetricDataSummary()
     {
@@ -158,7 +149,7 @@ class Piwik_DBStats_API
      * Returns a datatable describing how much space is taken up by each numeric
      * archive table, grouped by year.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getMetricDataSummaryByYear()
     {
@@ -166,8 +157,7 @@ class Piwik_DBStats_API
 
         $dataTable = $this->getMetricDataSummary();
 
-        $getTableYear = array('Piwik_DBStats_API', 'getArchiveTableYear');
-        $dataTable->filter('GroupBy', array('label', $getTableYear));
+        $dataTable->filter('GroupBy', array('label', __NAMESPACE__ . '\API::getArchiveTableYear'));
 
         return $dataTable;
     }
@@ -176,7 +166,7 @@ class Piwik_DBStats_API
      * Returns a datatable describing how much space is taken up by each blob
      * archive table.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getReportDataSummary()
     {
@@ -188,7 +178,7 @@ class Piwik_DBStats_API
      * Returns a datatable describing how much space is taken up by each blob
      * archive table, grouped by year.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getReportDataSummaryByYear()
     {
@@ -196,8 +186,7 @@ class Piwik_DBStats_API
 
         $dataTable = $this->getReportDataSummary();
 
-        $getTableYear = array('Piwik_DBStats_API', 'getArchiveTableYear');
-        $dataTable->filter('GroupBy', array('label', $getTableYear));
+        $dataTable->filter('GroupBy', array('label', __NAMESPACE__ . '\API::getArchiveTableYear'));
 
         return $dataTable;
     }
@@ -208,7 +197,7 @@ class Piwik_DBStats_API
      * An 'admin' table is a table that is not central to analytics functionality.
      * So any table that isn't an archive table or a log table is an 'admin' table.
      *
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getAdminDataSummary()
     {
@@ -224,7 +213,7 @@ class Piwik_DBStats_API
      *
      * @param bool $forceCache false to use the cached result, true to run the queries again and
      *                         cache the result.
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getIndividualReportsSummary($forceCache = false)
     {
@@ -240,7 +229,7 @@ class Piwik_DBStats_API
      *
      * @param bool $forceCache false to use the cached result, true to run the queries again and
      *                         cache the result.
-     * @return Piwik_DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
+     * @return DataTable A datatable with three columns: 'data_size', 'index_size', 'row_count'.
      */
     public function getIndividualMetricsSummary($forceCache = false)
     {
@@ -252,11 +241,11 @@ class Piwik_DBStats_API
      * Returns a datatable representation of a set of table statuses.
      *
      * @param array $statuses The table statuses to summarize.
-     * @return Piwik_DataTable
+     * @return DataTable
      */
     private function getTablesSummary($statuses)
     {
-        $dataTable = new Piwik_DataTable();
+        $dataTable = new DataTable();
         foreach ($statuses as $status) {
             $dataTable->addRowFromSimpleArray(array(
                                                    'label'      => $status['Name'],
@@ -271,27 +260,27 @@ class Piwik_DBStats_API
     /** Returns true if $name is the name of a numeric archive table, false if otherwise. */
     private function isNumericArchiveTable($name)
     {
-        return strpos($name, Piwik_Common::prefixTable('archive_numeric_')) === 0;
+        return strpos($name, Common::prefixTable('archive_numeric_')) === 0;
     }
 
     /** Returns true if $name is the name of a blob archive table, false if otherwise. */
     private function isBlobArchiveTable($name)
     {
-        return strpos($name, Piwik_Common::prefixTable('archive_blob_')) === 0;
+        return strpos($name, Common::prefixTable('archive_blob_')) === 0;
     }
 
     /** Returns true if $name is the name of a log table, false if otherwise. */
     private function isTrackerTable($name)
     {
-        return strpos($name, Piwik_Common::prefixTable('log_')) === 0;
+        return strpos($name, Common::prefixTable('log_')) === 0;
     }
 
     /**
      * Gets the year of an archive table from its name.
      *
      * @param string $tableName
-     * @param string The year.
      *
+     * @return string  the year
      * @ignore
      */
     public static function getArchiveTableYear($tableName)

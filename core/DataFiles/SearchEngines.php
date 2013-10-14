@@ -40,7 +40,7 @@
  * Reference: http://www.php.net/manual/en/mbstring.encodings.php
  *
  * You can add new search engines icons by adding the icon in the
- * plugins/Referers/images/searchEngines directory using the format
+ * plugins/Referrers/images/searchEngines directory using the format
  * 'mainSearchEngineUrl.png'. Example: www.google.com.png
  *
  * To help Piwik link directly the search engine result page for the keyword,
@@ -242,6 +242,9 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         // Charter
         'www.charter.net'                => array('Charter', 'q', 'search/index.php?q={k}'),
 
+        // Claro Search
+        'claro-search.com'               => array('Claro Search', 'q', '?q={k}'),
+
         // Clix (Enhanced by Google)
         'pesquisa.clix.pt'               => array('Clix', 'question', 'resultado.html?in=Mundial&question={k}'),
 
@@ -437,6 +440,8 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         '{}.wow.com'                     => array('Google'),
         'search.leonardo.it'             => array('Google'),
         'www.optuszoo.com.au'            => array('Google'),
+        'search.smt.docomo.ne.jp'        => array('Google', 'MT'),
+        'image.search.smt.docomo.ne.jp'     => array('Google', 'MT'),
 
 
         // Google Earth
@@ -553,9 +558,10 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         'search.b1.org'                  => array('InfoSpace', 'q'),
         'searchya.com'                   => array('InfoSpace', 'q'),
         'search.handycafe.com'           => array('InfoSpace', 'q'),
+        'search.v9.com'                  => array('InfoSpace', 'q'),
 
         /*
-         * Other InfoSpace powered metasearches are handled in Piwik_Common::extractSearchEngineInformationFromUrl()
+         * Other InfoSpace powered metasearches are handled in Common::extractSearchEngineInformationFromUrl()
          *
          * This includes sites such as:
          * - search.nation.com
@@ -705,6 +711,7 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
 
         // Orange
         'busca.orange.es'                => array('Orange', 'q', 'search?q={k}'),
+        'lemoteur.ke.voila.fr'           => array('Orange', 'kw', '?kw={k}'),
 
         // Paperball
         'www.paperball.de'               => array('Paperball', 'q', 'suche/s/?q={k}'),
@@ -783,6 +790,9 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         // Skynet
         'www.skynet.be'                  => array('Skynet', 'q', 'services/recherche/google?q={k}'),
 
+        // SmartAdressbar
+        'search.smartaddressbar.com'     => array('SmartAddressbar', 's', '?s={k}'),
+
         // Snap.do
         'search.snap.do'                 => array('Snap.do', 'q', '?q={k}'),
 
@@ -822,7 +832,7 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         // Teoma
         'www.teoma.com'                  => array('Teoma', 'q', 'web?q={k}'),
 
-        // Terra -- referer does not contain search phrase (keywords)
+        // Terra -- referrer does not contain search phrase (keywords)
         'buscador.terra.es'              => array('Terra', 'query', 'Default.aspx?source=Search&query={k}'),
         'buscador.terra.cl'              => array('Terra'),
         'buscador.terra.com.br'          => array('Terra'),
@@ -903,7 +913,7 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         'www.websearch.com'              => array('WebSearch', array('qkw', 'q'), 'search/results2.aspx?q={k}'),
 
         // Wedoo
-        // 2011-02-15 - keyword no longer appears to be in Referer URL; candidate for removal?
+        // 2011-02-15 - keyword no longer appears to be in Referrer URL; candidate for removal?
         'fr.wedoo.com'                   => array('Wedoo', 'keyword'),
         'en.wedoo.com'                   => array('Wedoo'),
         'es.wedoo.com'                   => array('Wedoo'),
@@ -933,6 +943,8 @@ if (!isset($GLOBALS['Piwik_SearchEngines'])) {
         'espanol.yahoo.com'              => array('Yahoo!'),
         'qc.yahoo.com'                   => array('Yahoo!'),
         'one.cn.yahoo.com'               => array('Yahoo!'),
+        'video.search.yahoo.co.jp'       => array('Yahoo!'),
+        'image.search.yahoo.co.jp'       => array('Yahoo!'),
 
         // Powered by Yahoo APIs
         'www.cercato.it'                 => array('Yahoo!', 'q'),

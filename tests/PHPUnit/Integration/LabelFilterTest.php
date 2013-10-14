@@ -7,7 +7,7 @@
  */
 
 /**
- * Tests the class Piwik_API_DataTableManipulator_LabelFilter.
+ * Tests the class LabelFilter.
  * This is not possible as unit test, since it loads data from the archive.
  */
 class Test_Piwik_Integration_LabelFilter extends IntegrationTestCase
@@ -106,15 +106,15 @@ class Test_Piwik_Integration_LabelFilter extends IntegrationTestCase
                 'expanded' => 0
             )
         );
-        $return[] = array('Referers.getSearchEngines', $searchEngineTest);
+        $return[] = array('Referrers.getSearchEngines', $searchEngineTest);
 
         $searchEngineTest['otherRequestParameters']['label'] = urlencode('Google>' . urlencode(html_entity_decode($keyword)));
-        $return[] = array('Referers.getSearchEngines', $searchEngineTest);
+        $return[] = array('Referrers.getSearchEngines', $searchEngineTest);
 
         return $return;
     }
 
-    public function getOutputPrefix()
+    public static function getOutputPrefix()
     {
         return 'LabelFilter';
     }

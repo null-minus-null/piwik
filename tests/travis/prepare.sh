@@ -4,6 +4,13 @@ set -e
 # Install XMLStarlet
 sudo apt-get install -qq xmlstarlet
 
+# Install fonts for UI tests
+if [ "$TEST_DIR" = "UI" ];
+then
+    sudo sh -c "echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections"
+    sudo apt-get install -qq ttf-mscorefonts-installer
+fi
+
 # Copy Piwik configuration
 echo "Install config.ini.php"
 cp ./tests/PHPUnit/config.ini.travis.php ./config/config.ini.php
@@ -23,6 +30,8 @@ fi
 mkdir ./tmp/assets
 mkdir ./tmp/cache
 mkdir ./tmp/latest
+mkdir ./tmp/logs
 mkdir ./tmp/sessions
 mkdir ./tmp/templates_c
+mkdir ./tmp/tcpdf
 chmod a+rw ./tests/lib/geoip-files

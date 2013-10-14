@@ -4,6 +4,10 @@
 //$_SERVER['REQUEST_URI'] = '/piwik-master/index.php';
 //$_SERVER['HTTP_HOST'] = 'localhost';
 
+use Piwik\Http;
+
+define('PIWIK_TEST_MODE', true);
+
 if (!defined("PIWIK_PATH_TEST_TO_ROOT")) {
     define('PIWIK_PATH_TEST_TO_ROOT', realpath(dirname(__FILE__) . '/../..'));
 }
@@ -58,12 +62,10 @@ require_once PIWIK_INCLUDE_PATH . '/core/FrontController.php';
 require_once PIWIK_INCLUDE_PATH . '/libs/spyc.php';
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/DatabaseTestCase.php';
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/IntegrationTestCase.php';
+require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/UITest.php';
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/FakeAccess.php';
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/MockPiwikOption.php';
-require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/MockEventDispatcher.php';
-
-// required to build code coverage for uncovered files
-require_once PIWIK_INCLUDE_PATH . '/plugins/SecurityInfo/PhpSecInfo/PhpSecInfo.php';
+require_once PIWIK_INCLUDE_PATH . '/vendor/autoload.php';
 
 // require test fixtures
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/BaseFixture.php';
@@ -93,16 +95,16 @@ Try again.
     // Now testing if the webserver is running
     $piwikServerUrl = Test_Piwik_BaseFixture::getRootUrl();
     try {
-        $fetched = Piwik_Http::sendHttpRequest($piwikServerUrl, $timeout = 3);
+        $fetched = Http::sendHttpRequest($piwikServerUrl, $timeout = 3);
     } catch (Exception $e) {
         $fetched = "ERROR fetching: " . $e->getMessage();
     }
-    $expectedString = 'plugins/CoreHome/templates/images/favicon.ico';
+    $expectedString = 'plugins/CoreHome/images/favicon.ico';
 
     if (strpos($fetched, $expectedString) === false) {
         echo "\nPiwik should be running at: " . $piwikServerUrl
             . "\nbut this URL returned an unexpected response: '"
-            . substr($fetched, 0, 300) . "...'\n\n";
-        exit;
+            . $fetched . "...'\n\n";
+        exit(1);
     }
 }

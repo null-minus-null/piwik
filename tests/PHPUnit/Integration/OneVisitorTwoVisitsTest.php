@@ -5,6 +5,8 @@
  * @link    http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\API\Proxy;
+use Piwik\Archive;
 
 /**
  * This use case covers many simple tracking features.
@@ -13,7 +15,7 @@
  * - Tracks 4 page views: 3 clicks and a file download
  * - URLs parameters exclude is tested
  * - In a returning visit, tracks a Goal conversion
- *   URL matching, with custom referer and keyword
+ *   URL matching, with custom referrer and keyword
  *   NO cookie support
  */
 class Test_Piwik_Integration_OneVisitorTwoVisits extends IntegrationTestCase
@@ -22,12 +24,12 @@ class Test_Piwik_Integration_OneVisitorTwoVisits extends IntegrationTestCase
 
     public function setUp()
     {
-        Piwik_API_Proxy::getInstance()->setHideIgnoredFunctions(false);
+        Proxy::getInstance()->setHideIgnoredFunctions(false);
     }
 
     public function tearDown()
     {
-        Piwik_API_Proxy::getInstance()->setHideIgnoredFunctions(true);
+        Proxy::getInstance()->setHideIgnoredFunctions(true);
     }
 
     /**
@@ -155,14 +157,14 @@ class Test_Piwik_Integration_OneVisitorTwoVisits extends IntegrationTestCase
     }
 
     /**
-     * Test that Archive_Single::preFetchBlob won't fetch extra unnecessary blobs.
+     * Test that Archive::getBlob won't fetch extra unnecessary blobs.
      *
      * @group        Integration
      * @group        OneVisitorTwoVisits
      */
-    public function testArchiveSinglePreFetchBlob()
+    public function testArchiveSingleGetBlob()
     {
-        $archive = Piwik_Archive::build(self::$fixture->idSite, 'day', self::$fixture->dateTime);
+        $archive = Archive::build(self::$fixture->idSite, 'day', self::$fixture->dateTime);
         $cache = $archive->getBlob('Actions_actions', 'all');
 
         $foundSubtable = false;
@@ -190,7 +192,7 @@ class Test_Piwik_Integration_OneVisitorTwoVisits extends IntegrationTestCase
     {
         try
         {
-            Piwik_Archive::build(
+            Archive::build(
                 'all', 'day', self::$fixture->dateTime, $segment = false, $_restrictToLogin = 'anotherLogin');
             $this->fail("Restricting sites to invalid login did not return 0 sites.");
         }
@@ -203,4 +205,3 @@ class Test_Piwik_Integration_OneVisitorTwoVisits extends IntegrationTestCase
 
 Test_Piwik_Integration_OneVisitorTwoVisits::$fixture = new Test_Piwik_Fixture_OneVisitorTwoVisits();
 Test_Piwik_Integration_OneVisitorTwoVisits::$fixture->excludeMozilla = true;
-

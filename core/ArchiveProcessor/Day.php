@@ -8,20 +8,29 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\ArchiveProcessor;
+
+use Piwik\ArchiveProcessor;
+use Piwik\DataArray;
+use Piwik\DataTable;
+use Piwik\Metrics;
+use Piwik\Piwik;
 
 /**
  * This class
  * @package Piwik
- * @subpackage Piwik_ArchiveProcessor
+ * @subpackage ArchiveProcessor
+ *
+ * @api
  */
-class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
+class Day extends ArchiveProcessor
 {
     /**
      * Converts the given array to a datatable
-     * @param Piwik_DataArray $array
-     * @return Piwik_DataTable
+     * @param DataArray $array
+     * @return \Piwik\DataTable
      */
-    static public function getDataTableFromDataArray(Piwik_DataArray $array)
+    static public function getDataTableFromDataArray(DataArray $array)
     {
         $dataArray = $array->getDataArray();
         $dataArrayTwoLevels = $array->getDataArrayWithTwoLevels();
@@ -30,10 +39,10 @@ class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
         if (!empty($dataArrayTwoLevels)) {
             $subtableByLabel = array();
             foreach ($dataArrayTwoLevels as $label => $subTable) {
-                $subtableByLabel[$label] = Piwik_DataTable::makeFromIndexedArray($subTable);
+                $subtableByLabel[$label] = DataTable::makeFromIndexedArray($subTable);
             }
         }
-        return Piwik_DataTable::makeFromIndexedArray($dataArray, $subtableByLabel);
+        return DataTable::makeFromIndexedArray($dataArray, $subtableByLabel);
     }
 
     /**
@@ -51,13 +60,13 @@ class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
      * The returned array will have a row per distinct operating systems,
      * and a column per stat (nb of visits, max  actions, etc)
      *
-     * 'label'    Piwik_Metrics::INDEX_NB_UNIQ_VISITORS    Piwik_Metrics::INDEX_NB_VISITS    etc.
+     * 'label'    Metrics::INDEX_NB_UNIQ_VISITORS    Metrics::INDEX_NB_VISITS    etc.
      * Linux    27    66    ...
      * Windows XP    12    ...
      * Mac OS    15    36    ...
      *
-     * @param string $dimension  Table log_visit field name to be use to compute common stats
-     * @return Piwik_DataArray
+     * @param string $dimension Table log_visit field name to be use to compute common stats
+     * @return DataArray
      */
     public function getMetricsForDimension($dimension)
     {
@@ -68,7 +77,7 @@ class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
             $dimension = array("label" => reset($dimension));
         }
         $query = $this->getLogAggregator()->queryVisitsByDimension($dimension);
-        $metrics = new Piwik_DataArray();
+        $metrics = new DataArray();
         while ($row = $query->fetch()) {
             $metrics->sumMetricsVisits($row["label"], $row);
         }
@@ -89,7 +98,7 @@ class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
     {
         $metrics = array();
         foreach ($data as $metricId => $value) {
-            $readableMetric = Piwik_Metrics::$mappingFromIdToName[$metricId];
+            $readableMetric = Metrics::$mappingFromIdToName[$metricId];
             $metrics[$readableMetric] = $value;
         }
         return $metrics;
@@ -97,6 +106,21 @@ class Piwik_ArchiveProcessor_Day extends Piwik_ArchiveProcessor
 
     protected function compute()
     {
-        Piwik_PostEvent('ArchiveProcessing_Day.compute', $this);
+        /**
+         * This event is triggered when the archiver wants to compute a new archive. Use this event to archive your
+         * custom report data if needed.
+         *
+         * Example:
+         * ```
+         * public function archiveDay(ArchiveProcessor\Day $archiveProcessor)
+         * {
+         *     $archiving = new Archiver($archiveProcessor);
+         *     if ($archiving->shouldArchive()) {
+         *         $archiving->archiveDay();
+         *     }
+         * }
+         * ```
+         */
+        Piwik::postEvent('ArchiveProcessor.Day.compute', array(&$this));
     }
 }

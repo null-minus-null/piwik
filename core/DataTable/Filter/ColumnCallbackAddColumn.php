@@ -8,14 +8,18 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\DataTable\Filter;
+
+use Piwik\DataTable;
+use Piwik\DataTable\Filter;
 
 /**
  * Adds a new column to every row of a DataTable based on the result of callback.
  *
  * @package Piwik
- * @subpackage Piwik_DataTable
+ * @subpackage DataTable
  */
-class Piwik_DataTable_Filter_ColumnCallbackAddColumn extends Piwik_DataTable_Filter
+class ColumnCallbackAddColumn extends Filter
 {
     /**
      * The names of the columns to pass to the callback.
@@ -41,11 +45,11 @@ class Piwik_DataTable_Filter_ColumnCallbackAddColumn extends Piwik_DataTable_Fil
     /**
      * Constructor.
      *
-     * @param Piwik_DataTable $table               The DataTable that will be filtered.
-     * @param array|string $columns             The names of the columns to pass to the callback.
-     * @param string $columnToAdd         The name of the column to add.
-     * @param mixed $functionToApply     The callback to apply to each row of a DataTable.
-     * @param array $functionParameters  Extra parameters to pass to $functionToApply.
+     * @param DataTable $table The DataTable that will be filtered.
+     * @param array|string $columns The names of the columns to pass to the callback.
+     * @param string $columnToAdd The name of the column to add.
+     * @param mixed $functionToApply The callback to apply to each row of a DataTable.
+     * @param array $functionParameters Extra parameters to pass to $functionToApply.
      */
     public function __construct($table, $columns, $columnToAdd, $functionToApply, $functionParameters = array())
     {
@@ -65,7 +69,7 @@ class Piwik_DataTable_Filter_ColumnCallbackAddColumn extends Piwik_DataTable_Fil
      * Executes a callback on every row of the supplied table and adds the result of
      * the callback as a new column to each row.
      *
-     * @param Piwik_DataTable $table  The table to filter.
+     * @param DataTable $table The table to filter.
      */
     public function filter($table)
     {

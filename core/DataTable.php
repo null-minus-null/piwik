@@ -9,8 +9,20 @@
  * @package Piwik
  */
 
+namespace Piwik;
+
+use Closure;
+use Exception;
+use Piwik\DataTable\DataTableInterface;
+use Piwik\DataTable\Filter;
+use Piwik\DataTable\Manager;
+use Piwik\DataTable\Renderer\Html;
+use Piwik\DataTable\Row;
+use Piwik\DataTable\Row\DataTableSummaryRow;
+use ReflectionClass;
+
 /**
- * @see destroy()
+ * @see Common::destroy()
  */
 require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
 
@@ -19,7 +31,7 @@ require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
  * ---- DataTable
  * A DataTable is a data structure used to store complex tables of data.
  *
- * A DataTable is composed of multiple DataTable_Row.
+ * A DataTable is composed of multiple DataTable\Row.
  * A DataTable can be applied one or several DataTable_Filter.
  * A DataTable can be given to a DataTable_Renderer that would export the data under a given format (XML, HTML, etc.).
  *
@@ -29,7 +41,7 @@ require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
  * - efficient way of loading data from an external source (from a PHP array structure)
  * - very simple interface to get data from the table
  *
- * ---- DataTable_Row
+ * ---- DataTable\Row
  * A DataTableRow in the table is defined by
  * - multiple columns (a label, multiple values, ...)
  * - optional metadata
@@ -40,20 +52,20 @@ require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
  *                        'visitors' => 155,
  *                        'pages' => 214,
  *                        'bounce_rate' => 67)
- * - metadata = array('logo' => '/img/browsers/FF.png')
+ * - metadata = array('logo' => '/plugins/UserSettings/images/browsers/FF.gif')
  * - no sub DataTable
  *
- * A more complex example would be a DataTable_Row that is associated to a sub DataTable.
+ * A more complex example would be a DataTable\Row that is associated to a sub DataTable.
  * For example, for the row of the search engine Google,
  * we want to get the list of keywords associated, with their statistics.
  * - columns = array(   'label' => 'Google',
  *                        'visits' => 1550,
  *                        'visits_length' => 514214,
  *                        'returning_visits' => 77)
- * - metadata = array(    'logo' => '/img/search/google.png',
+ * - metadata = array(    'logo' => '/plugins/Referrers/images/searchEngines/google.com.png',
  *                        'url' => 'http://google.com')
- * - DataTable = DataTable containing several DataTable_Row containing the keywords information for this search engine
- *            Example of one DataTable_Row
+ * - DataTable = DataTable containing several DataTable\Row containing the keywords information for this search engine
+ *            Example of one DataTable\Row
  *            - the keyword columns specific to this search engine =
  *                    array(  'label' => 'Piwik', // the keyword
  *                            'visitors' => 155,  // Piwik has been searched on Google by 155 visitors
@@ -65,7 +77,7 @@ require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
  *
  * ---- DataTable_Filter
  * A DataTable_Filter is a applied to a DataTable and so
- * can filter information in the multiple DataTable_Row.
+ * can filter information in the multiple DataTable\Row.
  *
  * For example a DataTable_Filter can:
  * - remove rows from the table,
@@ -130,12 +142,12 @@ require_once PIWIK_INCLUDE_PATH . '/core/Common.php';
  *                        [ keyword2, +1000% ]
  *                        [ keyword3, -430% ]
  *
- * @see Piwik_DataTable_Row A Piwik_DataTable is composed of Piwik_DataTable_Row
- *
  * @package Piwik
- * @subpackage Piwik_DataTable
+ * @subpackage DataTable
+ *
+ * @api
  */
-class Piwik_DataTable
+class DataTable implements DataTableInterface
 {
     /** Name for metadata that describes when a report was archived. */
     const ARCHIVED_DATE_METADATA_NAME = 'archived_date';
@@ -149,18 +161,11 @@ class Piwik_DataTable
     private static $maximumDepthLevelAllowed = self::MAX_DEPTH_DEFAULT;
 
     /**
-     * Array of Piwik_DataTable_Row
+     * Array of Row
      *
-     * @var Piwik_DataTable_Row[]
+     * @var Row[]
      */
     protected $rows = array();
-
-    /**
-     * Array of parent IDs
-     *
-     * @var array
-     */
-    protected $parents = null;
 
     /**
      * Id assigned to the DataTable, used to lookup the table using the DataTable_Manager
@@ -202,7 +207,7 @@ class Piwik_DataTable
     protected $tableSortedBy = false;
 
     /**
-     * List of Piwik_DataTable_Filter queued to this table
+     * List of Filter queued to this table
      *
      * @var array
      */
@@ -235,7 +240,7 @@ class Piwik_DataTable
     protected $rowsIndexByLabel = array();
 
     /**
-     * @var Piwik_DataTable_Row
+     * @var \Piwik\DataTable\Row
      */
     protected $summaryRow = null;
 
@@ -256,13 +261,12 @@ class Piwik_DataTable
 
     /**
      * The operations that should be used when aggregating columns from multiple rows.
-     * @see self::addDataTable() and Piwik_DataTable_Row::sumRow() 
+     * @see self::addDataTable() and DataTable\Row::sumRow()
      */
     protected $columnAggregationOperations = array();
 
     const ID_SUMMARY_ROW = -1;
     const LABEL_SUMMARY_ROW = -1;
-    const ID_PARENTS = -2;
 
     /**
      * Builds the DataTable, registers itself to the manager
@@ -270,7 +274,7 @@ class Piwik_DataTable
      */
     public function __construct()
     {
-        $this->currentId = Piwik_DataTable_Manager::getInstance()->addTable($this);
+        $this->currentId = Manager::getInstance()->addTable($this);
     }
 
     /**
@@ -285,10 +289,10 @@ class Piwik_DataTable
         ) {
             $depth++;
             foreach ($this->getRows() as $row) {
-                destroy($row);
+                Common::destroy($row);
             }
             unset($this->rows);
-            Piwik_DataTable_Manager::getInstance()->setTableDeleted($this->getId());
+            Manager::getInstance()->setTableDeleted($this->getId());
             $depth--;
         }
     }
@@ -297,7 +301,7 @@ class Piwik_DataTable
      * Sort the dataTable rows using the php callback function
      *
      * @param string $functionCallback
-     * @param string $columnSortedBy    The column name. Used to then ask the datatable what column are you sorted by
+     * @param string $columnSortedBy The column name. Used to then ask the datatable what column are you sorted by
      */
     public function sort($functionCallback, $columnSortedBy)
     {
@@ -308,7 +312,7 @@ class Piwik_DataTable
         if ($this->enableRecursiveSort === true) {
             foreach ($this->getRows() as $row) {
                 if (($idSubtable = $row->getIdSubDataTable()) !== null) {
-                    $table = Piwik_DataTable_Manager::getInstance()->getTable($idSubtable);
+                    $table = Manager::getInstance()->getTable($idSubtable);
                     $table->enableRecursiveSort();
                     $table->sort($functionCallback, $columnSortedBy);
                 }
@@ -369,19 +373,20 @@ class Piwik_DataTable
     /**
      * Apply a filter to this datatable
      *
-     * @param string|Closure $className   Class name, eg. "Sort" or "Piwik_DataTable_Filter_Sort".
+     * @param string|Closure $className Class name, eg. "Sort" or "Sort".
      *                                    If this variable is a closure, it will get executed immediately.
-     * @param array $parameters  Array of parameters to the filter, eg. array('nb_visits', 'asc')
+     * @param array $parameters Array of parameters to the filter, eg. array('nb_visits', 'asc')
      */
     public function filter($className, $parameters = array())
     {
-        if ($className instanceof Closure) {
-            $className($this);
+        if ($className instanceof \Closure) {
+            array_unshift($parameters, $this);
+            call_user_func_array($className, $parameters);
             return;
         }
-        
-        if (!class_exists($className, false)) {
-            $className = "Piwik_DataTable_Filter_" . $className;
+
+        if (!class_exists($className, true)) {
+            $className = 'Piwik\DataTable\Filter\\' . $className;
         }
         $reflectionObj = new ReflectionClass($className);
 
@@ -400,8 +405,8 @@ class Piwik_DataTable
      * Queue a DataTable_Filter that will be applied when applyQueuedFilters() is called.
      * (just before sending the datatable back to the browser (or API, etc.)
      *
-     * @param string $className   The class name of the filter, eg. Piwik_DataTable_Filter_Limit
-     * @param array $parameters  The parameters to give to the filter, eg. array( $offset, $limit) for the filter Piwik_DataTable_Filter_Limit
+     * @param string $className The class name of the filter, eg. Limit
+     * @param array $parameters The parameters to give to the filter, eg. array( $offset, $limit) for the filter Limit
      */
     public function queueFilter($className, $parameters = array())
     {
@@ -434,9 +439,9 @@ class Piwik_DataTable
      *
      * @example  tests/core/DataTable.test.php
      *
-     * @param Piwik_DataTable $tableToSum
+     * @param \Piwik\DataTable $tableToSum
      */
-    public function addDataTable(Piwik_DataTable $tableToSum)
+    public function addDataTable(DataTable $tableToSum)
     {
         foreach ($tableToSum->getRows() as $row) {
             $labelToLookFor = $row->getColumn('label');
@@ -455,7 +460,7 @@ class Piwik_DataTable
                 // if the row has the subtable already
                 // then we have to recursively sum the subtables
                 if (($idSubTable = $row->getIdSubDataTable()) !== null) {
-                    $subTable = Piwik_DataTable_Manager::getInstance()->getTable($idSubTable);
+                    $subTable = Manager::getInstance()->getTable($idSubTable);
                     $subTable->setColumnAggregationOperations($this->columnAggregationOperations);
                     $rowFound->sumSubtable($subTable);
                 }
@@ -464,19 +469,24 @@ class Piwik_DataTable
     }
 
     /**
-     * Returns the Piwik_DataTable_Row that has a column 'label' with the value $label
+     * Returns the Row that has a column 'label' with the value $label
      *
-     * @param string $label  Value of the column 'label' of the row to return
-     * @return Piwik_DataTable_Row|false  The row if found, false otherwise
+     * @param string $label Value of the column 'label' of the row to return
+     * @return \Piwik\DataTable\Row|bool  The row if found, false otherwise
      */
     public function getRowFromLabel($label)
     {
         $rowId = $this->getRowIdFromLabel($label);
-        if ($rowId instanceof Piwik_DataTable_Row) {
+        if ($rowId instanceof Row) {
             return $rowId;
         }
         if (is_int($rowId) && isset($this->rows[$rowId])) {
             return $this->rows[$rowId];
+        }
+        if ($rowId == self::ID_SUMMARY_ROW
+            && !empty($this->summaryRow)
+        ) {
+            return $this->summaryRow;
         }
         return false;
     }
@@ -484,7 +494,7 @@ class Piwik_DataTable
     /**
      * Returns the row id for the givel label
      *
-     * @param string $label  Value of the column 'label' of the row to return
+     * @param string $label Value of the column 'label' of the row to return
      * @return int|Row
      */
     public function getRowIdFromLabel($label)
@@ -510,11 +520,13 @@ class Piwik_DataTable
     /**
      * Get an empty table with the same properties as this one
      *
-     * @return Piwik_DataTable
+     * @param bool $keepFilters
+     *
+     * @return \Piwik\DataTable
      */
     public function getEmptyClone($keepFilters = true)
     {
-        $clone = new Piwik_DataTable;
+        $clone = new DataTable;
         if ($keepFilters) {
             $clone->queuedFilters = $this->queuedFilters;
         }
@@ -527,7 +539,7 @@ class Piwik_DataTable
      */
     private function rebuildIndex()
     {
-        foreach ($this->rows as $id => $row) {
+        foreach ($this->getRows() as $id => $row) {
             $label = $row->getColumn('label');
             if ($label !== false) {
                 $this->rowsIndexByLabel[$label] = $id;
@@ -540,7 +552,7 @@ class Piwik_DataTable
      * Returns the ith row in the array
      *
      * @param int $id
-     * @return Piwik_DataTable_Row or false if not found
+     * @return \Piwik\DataTable\Row or false if not found
      */
     public function getRowFromId($id)
     {
@@ -559,7 +571,7 @@ class Piwik_DataTable
      * Returns a row that has the subtable ID matching the parameter
      *
      * @param int $idSubTable
-     * @return Piwik_DataTable_Row|false if not found
+     * @return \Piwik\DataTable\Row|bool    false if not found
      */
     public function getRowFromIdSubDataTable($idSubTable)
     {
@@ -575,10 +587,10 @@ class Piwik_DataTable
     /**
      * Add a row to the table and rebuild the index if necessary
      *
-     * @param Piwik_DataTable_Row $row  to add at the end of the array
-     * @return Piwik_DataTable_Row
+     * @param \Piwik\DataTable\Row $row to add at the end of the array
+     * @return \Piwik\DataTable\Row
      */
-    public function addRow(Piwik_DataTable_Row $row)
+    public function addRow(Row $row)
     {
         // if there is a upper limit on the number of allowed rows and the table is full,
         // add the new row to the summary row
@@ -587,10 +599,8 @@ class Piwik_DataTable
         ) {
             if ($this->summaryRow === null) // create the summary row if necessary
             {
-                $this->addSummaryRow(new Piwik_DataTable_Row(array(
-                                                                  Piwik_DataTable_Row::COLUMNS => $row->getColumns()
-                                                             )));
-                $this->summaryRow->setColumn('label', self::LABEL_SUMMARY_ROW);
+                $columns = array('label' => self::LABEL_SUMMARY_ROW) + $row->getColumns();
+                $this->addSummaryRow(new Row(array(Row::COLUMNS => $columns)));
             } else {
                 $this->summaryRow->sumRow($row, $enableCopyMetadata = false, $this->columnAggregationOperations);
             }
@@ -605,7 +615,6 @@ class Piwik_DataTable
             if ($label !== false) {
                 $this->rowsIndexByLabel[$label] = count($this->rows) - 1;
             }
-            $this->indexNotUpToDate = false;
         }
         return $row;
     }
@@ -613,12 +622,23 @@ class Piwik_DataTable
     /**
      * Sets the summary row (a dataTable can have only one summary row)
      *
-     * @param Piwik_DataTable_Row $row
-     * @return Piwik_DataTable_Row Returns $row.
+     * @param Row $row
+     * @return Row Returns $row.
      */
-    public function addSummaryRow(Piwik_DataTable_Row $row)
+    public function addSummaryRow(Row $row)
     {
         $this->summaryRow = $row;
+
+        // add summary row to index
+        if (!$this->indexNotUpToDate
+            && $this->rebuildIndexContinuously
+        ) {
+            $label = $row->getColumn('label');
+            if ($label !== false) {
+                $this->rowsIndexByLabel[$label] = self::ID_SUMMARY_ROW;
+            }
+        }
+
         return $row;
     }
 
@@ -635,7 +655,7 @@ class Piwik_DataTable
     /**
      * Adds a new row from a PHP array data structure
      *
-     * @param array $row  eg. array(Piwik_DataTable_Row::COLUMNS => array( 'visits' => 13, 'test' => 'toto'),)
+     * @param array $row eg. array(Row::COLUMNS => array( 'visits' => 13, 'test' => 'toto'),)
      */
     public function addRowFromArray($row)
     {
@@ -645,7 +665,7 @@ class Piwik_DataTable
     /**
      * Adds a new row a PHP array data structure
      *
-     * @param array $row  eg. array('name' => 'google analytics', 'license' => 'commercial')
+     * @param array $row eg. array('name' => 'google analytics', 'license' => 'commercial')
      */
     public function addRowFromSimpleArray($row)
     {
@@ -653,9 +673,9 @@ class Piwik_DataTable
     }
 
     /**
-     * Returns the array of Piwik_DataTable_Row
+     * Returns the array of Row
      *
-     * @return Piwik_DataTable_Row[]
+     * @return Row[]
      */
     public function getRows()
     {
@@ -692,8 +712,8 @@ class Piwik_DataTable
         $columnValues = array();
         foreach ($this->getRows() as $row) {
             $columns = $row->getColumns();
-            foreach($columns as $column => $value) {
-                if(strpos($column, $name) === 0) {
+            foreach ($columns as $column => $value) {
+                if (strpos($column, $name) === 0) {
                     $columnValues[] = $row->getColumn($column);
                 }
             }
@@ -702,9 +722,36 @@ class Piwik_DataTable
     }
 
     /**
+     * Returns the list of columns the rows in this datatable contain. This will return the
+     * columns of the first row with data and assume they occur in every other row as well.
+     *
+     * @return array
+     */
+    public function getColumns()
+    {
+        $result = array();
+        foreach ($this->getRows() as $row) {
+            $columns = $row->getColumns();
+            if (!empty($columns)) {
+                $result = array_keys($columns);
+                break;
+            }
+        }
+
+        // make sure column names are not DB index values
+        foreach ($result as &$column) {
+            if (isset(Metrics::$mappingFromIdToName[$column])) {
+                $column = Metrics::$mappingFromIdToName[$column];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Returns an array containing the rows Metadata values
      *
-     * @param string $name  Metadata column to return
+     * @param string $name Metadata column to return
      * @return array
      */
     public function getRowsMetadata($name)
@@ -733,7 +780,7 @@ class Piwik_DataTable
     /**
      * Returns the first row of the DataTable
      *
-     * @return Piwik_DataTable_Row
+     * @return \Piwik\DataTable\Row
      */
     public function getFirstRow()
     {
@@ -750,7 +797,7 @@ class Piwik_DataTable
     /**
      * Returns the last row of the DataTable
      *
-     * @return Piwik_DataTable_Row
+     * @return Row
      */
     public function getLastRow()
     {
@@ -776,7 +823,7 @@ class Piwik_DataTable
         $totalCount = 0;
         foreach ($this->rows as $row) {
             if (($idSubTable = $row->getIdSubDataTable()) !== null) {
-                $subTable = Piwik_DataTable_Manager::getInstance()->getTable($idSubTable);
+                $subTable = Manager::getInstance()->getTable($idSubTable);
                 $count = $subTable->getRowsCountRecursive();
                 $totalCount += $count;
             }
@@ -798,21 +845,21 @@ class Piwik_DataTable
 
     public function __sleep()
     {
-        return array('rows', 'parents', 'summaryRow');
+        return array('rows', 'summaryRow');
     }
 
     /**
      * Rename a column in all rows
      *
-     * @param string $oldName  Old column name
-     * @param string $newName  New column name
+     * @param string $oldName Old column name
+     * @param string $newName New column name
      */
     public function renameColumn($oldName, $newName)
     {
         foreach ($this->getRows() as $row) {
             $row->renameColumn($oldName, $newName);
             if (($idSubDataTable = $row->getIdSubDataTable()) !== null) {
-                Piwik_DataTable_Manager::getInstance()->getTable($idSubDataTable)->renameColumn($oldName, $newName);
+                Manager::getInstance()->getTable($idSubDataTable)->renameColumn($oldName, $newName);
             }
         }
         if (!is_null($this->summaryRow)) {
@@ -833,7 +880,7 @@ class Piwik_DataTable
                 $row->deleteColumn($name);
             }
             if (($idSubDataTable = $row->getIdSubDataTable()) !== null) {
-                Piwik_DataTable_Manager::getInstance()->getTable($idSubDataTable)->deleteColumns($names, $deleteRecursiveInSubtables);
+                Manager::getInstance()->getTable($idSubDataTable)->deleteColumns($names, $deleteRecursiveInSubtables);
             }
         }
         if (!is_null($this->summaryRow)) {
@@ -846,7 +893,7 @@ class Piwik_DataTable
     /**
      * Deletes the ith row
      *
-     * @param int  $id
+     * @param int $id
      *
      * @throws Exception if the row $id cannot be found
      * @return void
@@ -901,7 +948,7 @@ class Piwik_DataTable
     /**
      * Deletes the rows from the list of rows ID
      *
-     * @param array $aKeys  ID of the rows to delete
+     * @param array $aKeys ID of the rows to delete
      * @throws Exception if any of the row to delete couldn't be found
      */
     public function deleteRows(array $aKeys)
@@ -919,7 +966,7 @@ class Piwik_DataTable
      */
     public function __toString()
     {
-        $renderer = new Piwik_DataTable_Renderer_Html();
+        $renderer = new Html();
         $renderer->setTable($this);
         return (string)$renderer;
     }
@@ -928,11 +975,11 @@ class Piwik_DataTable
      * Returns true if both DataTable are exactly the same.
      * Used in unit tests.
      *
-     * @param Piwik_DataTable $table1
-     * @param Piwik_DataTable $table2
+     * @param \Piwik\DataTable $table1
+     * @param \Piwik\DataTable $table2
      * @return bool
      */
-    public static function isEqual(Piwik_DataTable $table1, Piwik_DataTable $table2)
+    public static function isEqual(DataTable $table1, DataTable $table2)
     {
         $rows1 = $table1->getRows();
         $rows2 = $table2->getRows();
@@ -947,7 +994,7 @@ class Piwik_DataTable
         foreach ($rows1 as $row1) {
             $row2 = $table2->getRowFromLabel($row1->getColumn('label'));
             if ($row2 === false
-                || !Piwik_DataTable_Row::isEqual($row1, $row2)
+                || !Row::isEqual($row1, $row2)
             ) {
                 return false;
             }
@@ -972,9 +1019,9 @@ class Piwik_DataTable
      *  won't work.
      *
      * @throws Exception if an infinite recursion is found (a table row's has a subtable that is one of its parent table)
-     * @param int $maximumRowsInDataTable          If not null, defines the number of rows maximum of the serialized dataTable
-     * @param int $maximumRowsInSubDataTable       If not null, defines the number of rows maximum of the serialized subDataTable
-     * @param string $columnToSortByBeforeTruncation  Column to sort by before truncation
+     * @param int $maximumRowsInDataTable If not null, defines the number of rows maximum of the serialized dataTable
+     * @param int $maximumRowsInSubDataTable If not null, defines the number of rows maximum of the serialized subDataTable
+     * @param string $columnToSortByBeforeTruncation Column to sort by before truncation
      * @return array  Serialized arrays
      *            array(    // Datatable level0
      *                    0 => 'eghuighahgaueytae78yaet7yaetae',
@@ -997,12 +1044,12 @@ class Piwik_DataTable
 
         if ($depth > self::$maximumDepthLevelAllowed) {
             $depth = 0;
-            throw new Exception("Maximum recursion level of " . self::$maximumDepthLevelAllowed . " reached. Maybe you have set a DataTable_Row with an associated DataTable belonging already to one of its parent tables?");
+            throw new Exception("Maximum recursion level of " . self::$maximumDepthLevelAllowed . " reached. Maybe you have set a DataTable\Row with an associated DataTable belonging already to one of its parent tables?");
         }
         if (!is_null($maximumRowsInDataTable)) {
             $this->filter('AddSummaryRow',
                 array($maximumRowsInDataTable - 1,
-                      Piwik_DataTable::LABEL_SUMMARY_ROW,
+                      DataTable::LABEL_SUMMARY_ROW,
                       $columnToSortByBeforeTruncation)
             );
         }
@@ -1013,7 +1060,7 @@ class Piwik_DataTable
         $aSerializedDataTable = array();
         foreach ($this->rows as $row) {
             if (($idSubTable = $row->getIdSubDataTable()) !== null) {
-                $subTable = Piwik_DataTable_Manager::getInstance()->getTable($idSubTable);
+                $subTable = Manager::getInstance()->getTable($idSubTable);
                 $depth++;
                 $aSerializedDataTable = $aSerializedDataTable + $subTable->getSerialized($maximumRowsInSubDataTable, $maximumRowsInSubDataTable, $columnToSortByBeforeTruncation);
                 $depth--;
@@ -1029,10 +1076,7 @@ class Piwik_DataTable
 
         // we then serialize the rows and store them in the serialized dataTable
         $addToRows = array(self::ID_SUMMARY_ROW => $this->summaryRow);
-        //FIXMEA let's kill this soon * re-do if necessary
-        if ($this->parents && Piwik_Config::getInstance()->General['enable_archive_parents_of_datatable']) {
-            $addToRows[self::ID_PARENTS] = $this->parents;
-        }
+
         $aSerializedDataTable[$forcedId] = serialize($this->rows + $addToRows);
         foreach ($this->rows as &$row) {
             $row->cleanPostSerialize();
@@ -1047,13 +1091,15 @@ class Piwik_DataTable
      * Does not load recursively all the sub DataTable.
      * They will be loaded only when requesting them specifically.
      *
-     * The function creates all the necessary DataTable_Row
+     * The function creates all the necessary DataTable\Row
      *
-     * @param string $stringSerialized  string of serialized datatable
+     * @param string $stringSerialized string of serialized datatable
      * @throws Exception
      */
     public function addRowsFromSerializedArray($stringSerialized)
     {
+        require_once PIWIK_INCLUDE_PATH . "/core/DataTable/Bridges.php";
+        
         $serialized = unserialize($stringSerialized);
         if ($serialized === false) {
             throw new Exception("The unserialization has failed!");
@@ -1064,12 +1110,12 @@ class Piwik_DataTable
     /**
      * Loads the DataTable from a PHP array data structure
      *
-     * @param array $array  Array with the following structure
+     * @param array $array Array with the following structure
      *                       array(
      *                             // row1
      *                             array(
-     *                                   Piwik_DataTable_Row::COLUMNS => array( col1_name => value1, col2_name => value2, ...),
-     *                                   Piwik_DataTable_Row::METADATA => array( metadata1_name => value1,  ...), // see Piwik_DataTable_Row
+     *                                   Row::COLUMNS => array( col1_name => value1, col2_name => value2, ...),
+     *                                   Row::METADATA => array( metadata1_name => value1,  ...), // see Row
      *                             ),
      *                             // row2
      *                             array( ... ),
@@ -1078,13 +1124,8 @@ class Piwik_DataTable
     public function addRowsFromArray($array)
     {
         foreach ($array as $id => $row) {
-            if ($id == self::ID_PARENTS) {
-                $this->parents = $row;
-                continue;
-            }
-
             if (is_array($row)) {
-                $row = new Piwik_DataTable_Row($row);
+                $row = new Row($row);
             }
             if ($id == self::ID_SUMMARY_ROW) {
                 $this->summaryRow = $row;
@@ -1099,7 +1140,7 @@ class Piwik_DataTable
      * Basically maps a simple multidimensional php array to a DataTable.
      * Not recursive (if a row contains a php array itself, it won't be loaded)
      *
-     * @param array $array  Array with the simple structure:
+     * @param array $array Array with the simple structure:
      *                       array(
      *                             array( col1_name => valueA, col2_name => valueC, ...),
      *                             array( col1_name => valueB, col2_name => valueD, ...),
@@ -1119,7 +1160,6 @@ class Piwik_DataTable
             "; you will get the original php data structure serialized." .
             " The data structure looks like this: \n \$data = " . var_export($array, true) . "; ");
 
-
         // first pass to see if the array has the structure
         // array(col1_name => val1, col2_name => val2, etc.)
         // with val* that are never arrays (only strings/numbers/bool/etc.)
@@ -1136,10 +1176,10 @@ class Piwik_DataTable
             // case when the array is indexed by the default numeric index
             if (array_keys($array) == array_keys(array_fill(0, count($array), true))) {
                 foreach ($array as $row) {
-                    $this->addRow(new Piwik_DataTable_Row(array(Piwik_DataTable_Row::COLUMNS => array($row))));
+                    $this->addRow(new Row(array(Row::COLUMNS => array($row))));
                 }
             } else {
-                $this->addRow(new Piwik_DataTable_Row(array(Piwik_DataTable_Row::COLUMNS => $array)));
+                $this->addRow(new Row(array(Row::COLUMNS => $array)));
             }
             // we have converted our simple array to one single row
             // => we exit the method as the job is now finished
@@ -1167,10 +1207,10 @@ class Piwik_DataTable
                         throw $e;
                     }
                 }
-                $row = new Piwik_DataTable_Row(array(Piwik_DataTable_Row::COLUMNS => $row));
+                $row = new Row(array(Row::COLUMNS => $row));
             } // other (string, numbers...) => we build a line from this value
             else {
-                $row = new Piwik_DataTable_Row(array(Piwik_DataTable_Row::COLUMNS => array($key => $row)));
+                $row = new Row(array(Row::COLUMNS => array($key => $row)));
             }
             $this->addRow($row);
         }
@@ -1184,8 +1224,8 @@ class Piwik_DataTable
      * )
      * to a DataTable, ie. with the internal structure
      * array (
-     *     array( Piwik_DataTable_Row::COLUMNS => array('label' => LABEL, col1 => X, col2 => Y)),
-     *     array( Piwik_DataTable_Row::COLUMNS => array('label' => LABEL2, col1 => X, col2 => Y)),
+     *     array( Row::COLUMNS => array('label' => LABEL, col1 => X, col2 => Y)),
+     *     array( Row::COLUMNS => array('label' => LABEL2, col1 => X, col2 => Y)),
      * )
      *
      * It also works with array having only one value per row, eg.
@@ -1195,17 +1235,18 @@ class Piwik_DataTable
      * )
      * would be converted to:
      * array (
-     *     array( Piwik_DataTable_Row::COLUMNS => array('label' => LABEL, 'value' => X)),
-     *     array( Piwik_DataTable_Row::COLUMNS => array('label' => LABEL2, 'value' => Y)),
+     *     array( Row::COLUMNS => array('label' => LABEL, 'value' => X)),
+     *     array( Row::COLUMNS => array('label' => LABEL2, 'value' => Y)),
      * )
      *
      *
      * @param array $array Indexed array, two formats are supported
      * @param array|null $subtablePerLabel An indexed array of up to one DataTable to associate as a sub table
+     * @return \Piwik\DataTable
      */
     public static function makeFromIndexedArray($array, $subtablePerLabel = null)
     {
-        $table = new Piwik_DataTable();
+        $table = new DataTable();
         $cleanRow = array();
         foreach ($array as $label => $row) {
             // Support the case of an $array of single values
@@ -1213,39 +1254,14 @@ class Piwik_DataTable
                 $row = array('value' => $row);
             }
             // Put the 'label' column first
-            $cleanRow[Piwik_DataTable_Row::COLUMNS] = array('label' => $label) + $row;
+            $cleanRow[Row::COLUMNS] = array('label' => $label) + $row;
             // Assign subtable if specified
             if (isset($subtablePerLabel[$label])) {
-                $cleanRow[Piwik_DataTable_Row::DATATABLE_ASSOCIATED] = $subtablePerLabel[$label];
+                $cleanRow[Row::DATATABLE_ASSOCIATED] = $subtablePerLabel[$label];
             }
-            $table->addRow(new Piwik_DataTable_Row($cleanRow));
+            $table->addRow(new Row($cleanRow));
         }
         return $table;
-    }
-
-    /**
-     * Set the array of parent ids
-     *
-     * @param array $parents
-     *
-     * FIXMEA
-     */
-    public function setParents($parents)
-    {
-        $this->parents = $parents;
-    }
-
-    /**
-     * Get parents
-     *
-     * @return array  of all parents, root level first
-     */
-    public function getParents()
-    {
-        if ($this->parents == null) {
-            return array();
-        }
-        return $this->parents;
     }
 
     /**
@@ -1317,12 +1333,12 @@ class Piwik_DataTable
      * a subtable is encountered w/o the queried label, a new row is created
      * with the label, and a subtable is added to the row.
      *
-     * @param array        $path            The path to walk. An array of label values.
-     * @param array|bool   $missingRowColumns
+     * @param array $path The path to walk. An array of label values.
+     * @param array|bool $missingRowColumns
      *                                      The default columns to use when creating new arrays.
      *                                      If this parameter is supplied, new rows will be
      *                                      created if labels cannot be found.
-     * @param int          $maxSubtableRows The maximum number of allowed rows in new
+     * @param int $maxSubtableRows The maximum number of allowed rows in new
      *                                      subtables.
      *
      * @return array First element is the found row or false. Second element is
@@ -1346,7 +1362,7 @@ class Piwik_DataTable
                     return array(false, $i);
                 } else // if we're adding missing rows, add a new row
                 {
-                    $row = new Piwik_DataTable_Row_DataTableSummary();
+                    $row = new DataTableSummaryRow();
                     $row->setColumns(array('label' => $segment) + $missingRowColumns);
 
                     $next = $table->addRow($row);
@@ -1368,7 +1384,7 @@ class Piwik_DataTable
                     return array(false, $i);
                 } else if ($i != $pathLength - 1) // create subtable if missing, but only if not on the last segment
                 {
-                    $table = new Piwik_DataTable();
+                    $table = new DataTable();
                     $table->setMaximumAllowedRows($maxSubtableRows);
                     $table->setColumnAggregationOperations($this->columnAggregationOperations);
                     $next->setSubtable($table);
@@ -1384,18 +1400,18 @@ class Piwik_DataTable
     /**
      * Returns a new DataTable that contains the rows of each of this table's subtables.
      *
-     * @param string|bool  $labelColumn       If supplied the label of the parent row will be
+     * @param string|bool $labelColumn If supplied the label of the parent row will be
      *                                        added to a new column in each subtable row. If set to,
      *                                  'label' each subtable row's label will be prepended w/
      *                                        the parent row's label.
-     * @param bool         $useMetadataColumn If true and if $labelColumn is supplied, the parent row's
+     * @param bool $useMetadataColumn If true and if $labelColumn is supplied, the parent row's
      *                                        label will be added as metadata.
      *
-     * @return Piwik_DataTable
+     * @return \Piwik\DataTable
      */
     public function mergeSubtables($labelColumn = false, $useMetadataColumn = false)
     {
-        $result = new Piwik_DataTable();
+        $result = new DataTable();
         foreach ($this->getRows() as $row) {
             $subtable = $row->getSubtable();
             if ($subtable !== false) {
@@ -1443,19 +1459,19 @@ class Piwik_DataTable
      * Returns a new DataTable created with data from a 'simple' array.
      *
      * @param array $array
-     * @return Piwik_DataTable
+     * @return \Piwik\DataTable
      */
     public static function makeFromSimpleArray($array)
     {
-        $dataTable = new Piwik_DataTable();
+        $dataTable = new DataTable();
         $dataTable->addRowsFromSimpleArray($array);
         return $dataTable;
     }
-    
+
     /**
      * Set the aggregation operation for a column, e.g. "min".
-     * @see self::addDataTable() and Piwik_DataTable_Row::sumRow()
-     * 
+     * @see self::addDataTable() and DataTable\Row::sumRow()
+     *
      * @param string $columnName
      * @param string $operation
      */
@@ -1463,10 +1479,10 @@ class Piwik_DataTable
     {
         $this->columnAggregationOperations[$columnName] = $operation;
     }
-    
+
     /**
      * Set multiple aggregation operations at once.
-     * @param array $operations  format: column name => operation
+     * @param array $operations format: column name => operation
      */
     public function setColumnAggregationOperations($operations)
     {
@@ -1474,7 +1490,7 @@ class Piwik_DataTable
             $this->setColumnAggregationOperation($columnName, $operation);
         }
     }
-    
+
     /**
      * Get the configured column aggregation operations
      */
@@ -1482,16 +1498,16 @@ class Piwik_DataTable
     {
         return $this->columnAggregationOperations;
     }
-    
+
     /**
      * Creates a new DataTable instance from a serialize()'d array of rows.
-     * 
+     *
      * @param string $data
-     * @return Piwik_DataTable
+     * @return \Piwik\DataTable
      */
     public static function fromSerializedArray($data)
     {
-        $result = new Piwik_DataTable();
+        $result = new DataTable();
         $result->addRowsFromSerializedArray($data);
         return $result;
     }

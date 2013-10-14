@@ -5,6 +5,11 @@
  * @link http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\Config;
+use Piwik\Db;
+use Piwik\Common;
+use Piwik\Plugins\Goals\API;
+
 require_once PIWIK_INCLUDE_PATH . '/tests/PHPUnit/IntegrationTestCase.php';
 require_once PIWIK_INCLUDE_PATH . '/tests/LocalTracker.php';
 
@@ -43,12 +48,12 @@ abstract class BenchmarkTestCase extends IntegrationTestCase
         $installedFixture = false;
         try {
             if (isset(self::$fixture->tablesPrefix)) {
-                Piwik_Config::getInstance()->database['tables_prefix'] = self::$fixture->tablesPrefix;
-                Piwik_Common::$cachedTablePrefix = null;
+                Config::getInstance()->database['tables_prefix'] = self::$fixture->tablesPrefix;
+                Common::$cachedTablePrefix = null;
             }
 
-            Piwik_Query("USE " . $dbName);
-            $installedFixture = Piwik_GetOption('benchmark_fixture_name');
+            Db::query("USE " . $dbName);
+            $installedFixture = \Piwik\Option::get('benchmark_fixture_name');
         } catch (Exception $ex) {
             // ignore
         }
@@ -59,7 +64,7 @@ abstract class BenchmarkTestCase extends IntegrationTestCase
         // if we created an empty database, setup the fixture
         if ($createEmptyDatabase) {
             self::$fixture->setUp();
-            Piwik_SetOption('benchmark_fixture_name', $fixtureName);
+            \Piwik\Option::set('benchmark_fixture_name', $fixtureName);
         }
     }
 
@@ -103,7 +108,7 @@ class Piwik_Test_Fixture_EmptyOneSite
             $this->date, $ecommerce = 1, $siteName = "Site #0", $siteUrl = "http://whatever.com/");
 
         // add two goals
-        $goals = Piwik_Goals_API::getInstance();
+        $goals = API::getInstance();
         $goals->addGoal($this->idSite, 'all', 'url', 'http', 'contains', false, 5);
         $goals->addGoal($this->idSite, 'all', 'url', 'http', 'contains');
     }

@@ -5,6 +5,13 @@
  * @link http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\Access;
+use Piwik\Filesystem;
+use Piwik\MetricsFormatter;
+use Piwik\Piwik;
+use Piwik\Plugins\SitesManager\API;
+use Piwik\Translate;
+
 class PiwikTest extends DatabaseTestCase
 {
     /**
@@ -106,14 +113,18 @@ class PiwikTest extends DatabaseTestCase
      */
     public function testGetPrettyTimeFromSeconds($seconds, $expected)
     {
-        Piwik_Translate::getInstance()->loadEnglishTranslation();
+        if (($seconds * 100) > PHP_INT_MAX) {
+            $this->markTestSkipped("Will not pass on 32-bit machine.");
+        }
+        
+        Translate::loadEnglishTranslation();
 
         $sentenceExpected = str_replace(' ', '&nbsp;', $expected[0]);
         $numericExpected = $expected[1];
-        $this->assertEquals($sentenceExpected, Piwik::getPrettyTimeFromSeconds($seconds, $sentence = true));
-        $this->assertEquals($numericExpected, Piwik::getPrettyTimeFromSeconds($seconds, $sentence = false));
+        $this->assertEquals($sentenceExpected, MetricsFormatter::getPrettyTimeFromSeconds($seconds, $sentence = true));
+        $this->assertEquals($numericExpected, MetricsFormatter::getPrettyTimeFromSeconds($seconds, $sentence = false));
 
-        Piwik_Translate::getInstance()->unloadEnglishTranslation();
+        Translate::unloadEnglishTranslation();
     }
 
     /**
@@ -204,20 +215,19 @@ class PiwikTest extends DatabaseTestCase
      */
     public function testGetPrettyValue($columnName, $value, $expected)
     {
-        Piwik_Translate::getInstance()->loadEnglishTranslation();
+        Translate::loadEnglishTranslation();
 
-        $access = new Piwik_Access();
-        Zend_Registry::set('access', $access);
+        $access = Access::getInstance();
         $access->setSuperUser(true);
 
-        $idsite = Piwik_SitesManager_API::getInstance()->addSite("test", "http://test");
+        $idsite = API::getInstance()->addSite("test", "http://test");
 
         $this->assertEquals(
             $expected,
-            Piwik::getPrettyValue($idsite, $columnName, $value, false, false)
+            MetricsFormatter::getPrettyValue($idsite, $columnName, $value, false, false)
         );
 
-        Piwik_Translate::getInstance()->unloadEnglishTranslation();
+        Translate::unloadEnglishTranslation();
     }
 
     /**
@@ -251,6 +261,6 @@ class PiwikTest extends DatabaseTestCase
      */
     public function testCheckIfFileSystemIsNFSOnNonNFS()
     {
-        $this->assertFalse(Piwik::checkIfFileSystemIsNFS());
+        $this->assertFalse(Filesystem::checkIfFileSystemIsNFS());
     }
 }

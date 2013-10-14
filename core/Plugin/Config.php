@@ -9,12 +9,14 @@
  * @package Piwik
  */
 
+namespace Piwik\Plugin;
+
 /**
  * Read / write local plugin-specific configuration
  *
  * @package Piwik
  */
-class Piwik_Plugin_Config
+class Config
 {
     private $pluginName;
     private $configFileName;
@@ -22,8 +24,8 @@ class Piwik_Plugin_Config
     /**
      * Constructor
      *
-     * @param string $pluginName      name of the plugin
-     * @param string $configFileName  name of the plugin file; defaults to local.config.php
+     * @param string $pluginName name of the plugin
+     * @param string $configFileName name of the plugin file; defaults to local.config.php
      */
     public function __construct($pluginName, $configFileName = 'local.config.php')
     {

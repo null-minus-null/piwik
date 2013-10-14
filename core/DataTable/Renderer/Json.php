@@ -8,15 +8,21 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\DataTable\Renderer;
+
+use Piwik\Common;
+use Piwik\DataTable\Renderer;
+use Piwik\DataTable;
+use Piwik\ProxyHttp;
 
 /**
  * JSON export.
  * Works with recursive DataTable (when a row can be associated with a subDataTable).
  *
  * @package Piwik
- * @subpackage Piwik_DataTable
+ * @subpackage DataTable
  */
-class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
+class Json extends Renderer
 {
     /**
      * Computes the dataTable output and returns the string/binary
@@ -48,7 +54,7 @@ class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
     /**
      * Computes the output for the given data table
      *
-     * @param Piwik_DataTable $table
+     * @param DataTable $table
      * @return string
      */
     protected function renderTable($table)
@@ -59,7 +65,7 @@ class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
                 $array = array($array);
             }
         } else {
-            $renderer = new Piwik_DataTable_Renderer_Php();
+            $renderer = new Php();
             $renderer->setTable($table);
             $renderer->setRenderSubTables($this->isRenderSubtables());
             $renderer->setSerialize(false);
@@ -72,10 +78,14 @@ class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
         }
 
         // decode all entities
-        $callback = create_function('&$value,$key', 'if(is_string($value)){$value = html_entity_decode($value, ENT_QUOTES, "UTF-8");}');
+        $callback = function (&$value, $key) {
+            if (is_string($value)) {
+                $value = html_entity_decode($value, ENT_QUOTES, "UTF-8");
+            };
+        };
         array_walk_recursive($array, $callback);
 
-        $str = Piwik_Common::json_encode($array);
+        $str = Common::json_encode($array);
 
         return $this->jsonpWrap($str);
     }
@@ -86,8 +96,8 @@ class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
      */
     protected function jsonpWrap($str)
     {
-        if (($jsonCallback = Piwik_Common::getRequestVar('callback', false)) === false)
-            $jsonCallback = Piwik_Common::getRequestVar('jsoncallback', false);
+        if (($jsonCallback = Common::getRequestVar('callback', false)) === false)
+            $jsonCallback = Common::getRequestVar('jsoncallback', false);
         if ($jsonCallback !== false) {
             if (preg_match('/^[0-9a-zA-Z_]*$/D', $jsonCallback) > 0) {
                 $str = $jsonCallback . "(" . $str . ")";
@@ -103,7 +113,7 @@ class Piwik_DataTable_Renderer_Json extends Piwik_DataTable_Renderer
     protected function renderHeader()
     {
         self::sendHeaderJSON();
-        Piwik::overrideCacheControlHeaders();
+        ProxyHttp::overrideCacheControlHeaders();
     }
 
     public static function sendHeaderJSON()

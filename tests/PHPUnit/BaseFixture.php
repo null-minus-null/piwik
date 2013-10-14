@@ -5,6 +5,20 @@
  * @link http://piwik.org
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  */
+use Piwik\Access;
+use Piwik\Common;
+use Piwik\Config;
+use Piwik\Date;
+use Piwik\Plugins\MobileMessaging\MobileMessaging;
+use Piwik\Plugins\ScheduledReports\API as APIScheduledReports;
+use Piwik\Plugins\ScheduledReports\ScheduledReports;
+use Piwik\Plugins\SitesManager\API as APISitesManager;
+use Piwik\Plugins\UserCountry\LocationProvider;
+use Piwik\Plugins\UsersManager\API as APIUsersManager;
+use Piwik\ReportRenderer;
+use Piwik\Site;
+use Piwik\Url;
+use Piwik\Db;
 
 /**
  * Base type for all integration test fixtures. Integration test fixtures
@@ -23,8 +37,8 @@
 abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
 {
     const IMAGES_GENERATED_ONLY_FOR_OS = 'linux';
-    const IMAGES_GENERATED_FOR_PHP = '5.4';
-    const IMAGES_GENERATED_FOR_GD = '2.0.36';
+    const IMAGES_GENERATED_FOR_PHP = '5.5';
+    const IMAGES_GENERATED_FOR_GD = '2.1.1';
 
     /** Adds data to Piwik. Creates sites, tracks visits, imports log files, etc. */
     public abstract function setUp();
@@ -40,13 +54,17 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
      * @param int $ecommerce
      * @param string $siteName
      *
+     * @param bool|string $siteUrl
+     * @param int $siteSearch
+     * @param null|string $searchKeywordParameters
+     * @param null|string $searchCategoryParameters
      * @return int    idSite of website created
      */
     public static function createWebsite($dateTime, $ecommerce = 0, $siteName = 'Piwik test', $siteUrl = false,
                                          $siteSearch = 1, $searchKeywordParameters = null,
                                          $searchCategoryParameters = null)
     {
-        $idSite = Piwik_SitesManager_API::getInstance()->addSite(
+        $idSite = APISitesManager::getInstance()->addSite(
             $siteName,
             $siteUrl === false ? "http://piwik.net/" : $siteUrl,
             $ecommerce,
@@ -58,13 +76,13 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
         );
 
         // Manually set the website creation date to a day earlier than the earliest day we record stats for
-        Zend_Registry::get('db')->update(Piwik_Common::prefixTable("site"),
-            array('ts_created' => Piwik_Date::factory($dateTime)->subDay(1)->getDatetime()),
+        Db::get()->update(Common::prefixTable("site"),
+            array('ts_created' => Date::factory($dateTime)->subDay(1)->getDatetime()),
             "idsite = $idSite"
         );
 
         // Clear the memory Website cache
-        Piwik_Site::clearCache();
+        Site::clearCache();
 
         return $idSite;
     }
@@ -76,7 +94,7 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
      */
     public static function getRootUrl()
     {
-        $piwikUrl = Piwik_Url::getCurrentUrlWithoutFileName();
+        $piwikUrl = Url::getCurrentUrlWithoutFileName();
 
         $pathBeforeRoot = 'tests';
         // Running from a plugin
@@ -105,9 +123,10 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
     /**
      * Returns a PiwikTracker object that you can then use to track pages or goals.
      *
-     * @param         $idSite
-     * @param         $dateTime
+     * @param int     $idSite
+     * @param string  $dateTime
      * @param boolean $defaultInit If set to true, the tracker object will have default IP, user agent, time, resolution, etc.
+     * @param bool    $useLocal
      *
      * @return PiwikTracker
      */
@@ -152,14 +171,29 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
         );
     }
 
+    /**
+     * Checks that the response from bulk tracking is a valid JSON
+     * string. Will fail the test if JSON status is not success.
+     *
+     * @param $response
+     */
+    public static function checkBulkTrackingResponse($response) {
+        $data = json_decode($response, true);
+        if (!is_array($data)) {
+            echo "Bulk tracking response is not an array: " . var_export($data, true) . "\n";
+        }
+        self::assertArrayHasKey('status', $data);
+        self::assertEquals('success', $data['status']);
+    }
+
     public static function makeLocation($city, $region, $country, $lat = null, $long = null, $isp = null)
     {
-        return array(Piwik_UserCountry_LocationProvider::CITY_NAME_KEY    => $city,
-                     Piwik_UserCountry_LocationProvider::REGION_CODE_KEY  => $region,
-                     Piwik_UserCountry_LocationProvider::COUNTRY_CODE_KEY => $country,
-                     Piwik_UserCountry_LocationProvider::LATITUDE_KEY     => $lat,
-                     Piwik_UserCountry_LocationProvider::LONGITUDE_KEY    => $long,
-                     Piwik_UserCountry_LocationProvider::ISP_KEY          => $isp);
+        return array(LocationProvider::CITY_NAME_KEY    => $city,
+                     LocationProvider::REGION_CODE_KEY  => $region,
+                     LocationProvider::COUNTRY_CODE_KEY => $country,
+                     LocationProvider::LATITUDE_KEY     => $lat,
+                     LocationProvider::LONGITUDE_KEY    => $long,
+                     LocationProvider::ISP_KEY          => $isp);
     }
 
     /**
@@ -170,9 +204,9 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
      */
     public static function getTokenAuth()
     {
-        return Piwik_UsersManager_API::getInstance()->getTokenAuth(
-            Piwik_Config::getInstance()->superuser['login'],
-            Piwik_Config::getInstance()->superuser['password']
+        return APIUsersManager::getInstance()->getTokenAuth(
+            Config::getInstance()->superuser['login'],
+            Config::getInstance()->superuser['password']
         );
     }
 
@@ -190,13 +224,13 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
      */
     public static function setUpScheduledReports($idSite)
     {
-        // fake access is needed so API methods can call Piwik::getCurrentUserLogin(), e.g: 'PDFReports.addReport'
+        // fake access is needed so API methods can call Piwik::getCurrentUserLogin(), e.g: 'ScheduledReports.addReport'
         $pseudoMockAccess = new FakeAccess;
         FakeAccess::$superUser = true;
-        Zend_Registry::set('access', $pseudoMockAccess);
+        Access::setSingletonInstance($pseudoMockAccess);
 
         // retrieve available reports
-        $availableReportMetadata = Piwik_PDFReports_API::getReportMetadata($idSite, Piwik_PDFReports::EMAIL_TYPE);
+        $availableReportMetadata = APIScheduledReports::getReportMetadata($idSite, ScheduledReports::EMAIL_TYPE);
 
         $availableReportIds = array();
         foreach ($availableReportMetadata as $reportMetadata) {
@@ -205,66 +239,66 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
 
         //@review should we also test evolution graphs?
         // set-up mail report
-        Piwik_PDFReports_API::getInstance()->addReport(
+        APIScheduledReports::getInstance()->addReport(
             $idSite,
             'Mail Test report',
             'day', // overridden in getApiForTestingScheduledReports()
             0,
-            Piwik_PDFReports::EMAIL_TYPE,
-            Piwik_ReportRenderer::HTML_FORMAT, // overridden in getApiForTestingScheduledReports()
+            ScheduledReports::EMAIL_TYPE,
+            ReportRenderer::HTML_FORMAT, // overridden in getApiForTestingScheduledReports()
             $availableReportIds,
-            array(Piwik_PDFReports::DISPLAY_FORMAT_PARAMETER => Piwik_PDFReports::DISPLAY_FORMAT_TABLES_ONLY)
+            array(ScheduledReports::DISPLAY_FORMAT_PARAMETER => ScheduledReports::DISPLAY_FORMAT_TABLES_ONLY)
         );
 
         // set-up sms report for one website
-        Piwik_PDFReports_API::getInstance()->addReport(
+        APIScheduledReports::getInstance()->addReport(
             $idSite,
             'SMS Test report, one website',
             'day', // overridden in getApiForTestingScheduledReports()
             0,
-            Piwik_MobileMessaging::MOBILE_TYPE,
-            Piwik_MobileMessaging::SMS_FORMAT,
+            MobileMessaging::MOBILE_TYPE,
+            MobileMessaging::SMS_FORMAT,
             array("MultiSites_getOne"),
             array("phoneNumbers" => array())
         );
 
         // set-up sms report for all websites
-        Piwik_PDFReports_API::getInstance()->addReport(
+        APIScheduledReports::getInstance()->addReport(
             $idSite,
             'SMS Test report, all websites',
             'day', // overridden in getApiForTestingScheduledReports()
             0,
-            Piwik_MobileMessaging::MOBILE_TYPE,
-            Piwik_MobileMessaging::SMS_FORMAT,
+            MobileMessaging::MOBILE_TYPE,
+            MobileMessaging::SMS_FORMAT,
             array("MultiSites_getAll"),
             array("phoneNumbers" => array())
         );
 
         if (self::canImagesBeIncludedInScheduledReports()) {
             // set-up mail report with images
-            Piwik_PDFReports_API::getInstance()->addReport(
+            APIScheduledReports::getInstance()->addReport(
                 $idSite,
                 'Mail Test report',
                 'day', // overridden in getApiForTestingScheduledReports()
                 0,
-                Piwik_PDFReports::EMAIL_TYPE,
-                Piwik_ReportRenderer::HTML_FORMAT, // overridden in getApiForTestingScheduledReports()
+                ScheduledReports::EMAIL_TYPE,
+                ReportRenderer::HTML_FORMAT, // overridden in getApiForTestingScheduledReports()
                 $availableReportIds,
-                array(Piwik_PDFReports::DISPLAY_FORMAT_PARAMETER => Piwik_PDFReports::DISPLAY_FORMAT_TABLES_AND_GRAPHS)
+                array(ScheduledReports::DISPLAY_FORMAT_PARAMETER => ScheduledReports::DISPLAY_FORMAT_TABLES_AND_GRAPHS)
             );
 
             // set-up mail report with one row evolution based png graph
-            Piwik_PDFReports_API::getInstance()->addReport(
+            APIScheduledReports::getInstance()->addReport(
                 $idSite,
                 'Mail Test report',
                 'day',
                 0,
-                Piwik_PDFReports::EMAIL_TYPE,
-                Piwik_ReportRenderer::HTML_FORMAT,
+                ScheduledReports::EMAIL_TYPE,
+                ReportRenderer::HTML_FORMAT,
                 array('Actions_getPageTitles'),
                 array(
-                     Piwik_PDFReports::DISPLAY_FORMAT_PARAMETER => Piwik_PDFReports::DISPLAY_FORMAT_GRAPHS_ONLY,
-                     Piwik_PDFReports::EVOLUTION_GRAPH_PARAMETER => 'true',
+                     ScheduledReports::DISPLAY_FORMAT_PARAMETER => ScheduledReports::DISPLAY_FORMAT_GRAPHS_ONLY,
+                     ScheduledReports::EVOLUTION_GRAPH_PARAMETER => 'true',
                 )
             );
         }
@@ -279,7 +313,7 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
         return
             stristr(php_uname(), self::IMAGES_GENERATED_ONLY_FOR_OS) &&
             strpos( phpversion(), self::IMAGES_GENERATED_FOR_PHP) !== false &&
-            $gdInfo['GD Version'] == self::IMAGES_GENERATED_FOR_GD;
+            strpos( $gdInfo['GD Version'], self::IMAGES_GENERATED_FOR_GD) !== false;
     }
 
     public static $geoIpDbUrl = 'http://piwik-team.s3.amazonaws.com/GeoIP.dat.gz';
@@ -320,13 +354,15 @@ abstract class Test_Piwik_BaseFixture extends PHPUnit_Framework_Assert
         // unzip the dump
         exec("gunzip -c \"" . $outfileName . "\" > \"$deflatedOut\"", $output, $return);
         if ($return !== 0) {
+            \Piwik\Log::info("gunzip failed with file that has following contents:");
+            \Piwik\Log::info(file_get_contents($outfile));
             throw new Exception("gunzip failed($return): " . implode("\n", $output));
         }
     }
 
     protected static function executeLogImporter($logFile, $options)
     {
-        $python = Piwik_Common::isWindows() ? "C:\Python27\python.exe" : 'python';
+        $python = \Piwik\SettingsServer::isWindows() ? "C:\Python27\python.exe" : 'python';
 
         // create the command
         $cmd = $python

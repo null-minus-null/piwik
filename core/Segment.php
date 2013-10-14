@@ -8,15 +8,19 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik;
+
+use Exception;
+use Piwik\Plugins\API\API;
 
 /**
  *
  * @package Piwik
  */
-class Piwik_Segment
+class Segment
 {
     /**
-     * @var Piwik_SegmentExpression
+     * @var SegmentExpression
      */
     protected $segment = null;
 
@@ -28,7 +32,7 @@ class Piwik_Segment
     public function __construct($string, $idSites)
     {
         $string = trim($string);
-        if (!Piwik::isSegmentationEnabled()
+        if (!SettingsPiwik::isSegmentationEnabled()
             && !empty($string)
         ) {
             throw new Exception("The Super User has disabled the Segmentation feature.");
@@ -37,8 +41,8 @@ class Piwik_Segment
         // First try with url decoded value. If that fails, try with raw value.
         // If that also fails, it will throw the exception
         try {
-            $this->initializeSegment( urldecode($string), $idSites);
-        } catch(Exception $e) {
+            $this->initializeSegment(urldecode($string), $idSites);
+        } catch (Exception $e) {
             $this->initializeSegment($string, $idSites);
         }
     }
@@ -55,7 +59,7 @@ class Piwik_Segment
 
         $this->string = $string;
         $this->idSites = $idSites;
-        $segment = new Piwik_SegmentExpression($string);
+        $segment = new SegmentExpression($string);
         $this->segment = $segment;
 
         // parse segments
@@ -66,9 +70,9 @@ class Piwik_Segment
         // and apply a filter to the value to match if necessary (to map DB fields format)
         $cleanedExpressions = array();
         foreach ($expressions as $expression) {
-            $operand = $expression[Piwik_SegmentExpression::INDEX_OPERAND];
+            $operand = $expression[SegmentExpression::INDEX_OPERAND];
             $cleanedExpression = $this->getCleanedExpression($operand);
-            $expression[Piwik_SegmentExpression::INDEX_OPERAND] = $cleanedExpression;
+            $expression[SegmentExpression::INDEX_OPERAND] = $cleanedExpression;
             $cleanedExpressions[] = $expression;
         }
         $segment->setSubExpressionsAfterCleanup($cleanedExpressions);
@@ -84,7 +88,7 @@ class Piwik_Segment
     protected function getCleanedExpression($expression)
     {
         if (empty($this->availableSegments)) {
-            $this->availableSegments = Piwik_API_API::getInstance()->getSegmentsMetadata($this->idSites, $_hideImplementationData = false);
+            $this->availableSegments = API::getInstance()->getSegmentsMetadata($this->idSites, $_hideImplementationData = false);
         }
 
         $name = $expression[0];
@@ -109,18 +113,18 @@ class Piwik_Segment
             // apply presentation filter
             if (isset($segment['sqlFilter'])
                 && !empty($segment['sqlFilter'])
-                && $matchType != Piwik_SegmentExpression::MATCH_IS_NOT_NULL_NOR_EMPTY
-                && $matchType != Piwik_SegmentExpression::MATCH_IS_NULL_OR_EMPTY
+                && $matchType != SegmentExpression::MATCH_IS_NOT_NULL_NOR_EMPTY
+                && $matchType != SegmentExpression::MATCH_IS_NULL_OR_EMPTY
             ) {
                 $value = call_user_func($segment['sqlFilter'], $value, $segment['sqlSegment'], $matchType, $name);
 
                 // sqlFilter-callbacks might return arrays for more complex cases
-                // e.g. see Piwik_Actions::getIdActionFromSegment()
+                // e.g. see Actions::getIdActionFromSegment()
                 if (is_array($value)
                     && isset($value['SQL'])
                 ) {
                     // Special case: returned value is a sub sql expression!
-                    $matchType = Piwik_SegmentExpression::MATCH_ACTIONS_CONTAINS;
+                    $matchType = SegmentExpression::MATCH_ACTIONS_CONTAINS;
                 }
             }
             break;
@@ -148,16 +152,15 @@ class Piwik_Segment
         return md5($normalizedSegmentString);
     }
 
-
     /**
      * Extend SQL query with segment expressions
      *
-     * @param string $select   select clause
-     * @param array $from     array of table names (without prefix)
-     * @param bool|string $where    (optional )where clause
-     * @param array|string $bind     (optional) params to bind
-     * @param bool|string $orderBy  (optional) order by clause
-     * @param bool|string $groupBy  (optional) group by clause
+     * @param string $select select clause
+     * @param array $from array of table names (without prefix)
+     * @param bool|string $where (optional )where clause
+     * @param array|string $bind (optional) params to bind
+     * @param bool|string $orderBy (optional) order by clause
+     * @param bool|string $groupBy (optional) group by clause
      * @return string entire select query
      */
     public function getSelectQuery($select, $from, $where = false, $bind = array(), $orderBy = false, $groupBy = false)
@@ -205,7 +208,7 @@ class Piwik_Segment
 
     /**
      * Generate the join sql based on the needed tables
-     * @param array $tables  tables to join
+     * @param array $tables tables to join
      * @throws Exception if tables can't be joined
      * @return array
      */
@@ -239,7 +242,7 @@ class Piwik_Segment
                 // join condition provided
                 $alias = isset($table['tableAlias']) ? $table['tableAlias'] : $table['table'];
                 $sql .= "
-				LEFT JOIN " . Piwik_Common::prefixTable($table['table']) . " AS " . $alias
+				LEFT JOIN " . Common::prefixTable($table['table']) . " AS " . $alias
                     . " ON " . $table['joinOn'];
                 continue;
             }
@@ -248,7 +251,7 @@ class Piwik_Segment
                 throw new Exception("Table '$table' can't be used for segmentation");
             }
 
-            $tableSql = Piwik_Common::prefixTable($table) . " AS $table";
+            $tableSql = Common::prefixTable($table) . " AS $table";
 
             if ($i == 0) {
                 // first table
@@ -305,11 +308,11 @@ class Piwik_Segment
 
     /**
      * Build select query the normal way
-     * @param string $select   fieldlist to be selected
-     * @param string $from     tablelist to select from
-     * @param string $where    where clause
-     * @param string $orderBy  order by clause
-     * @param string $groupBy  group by clause
+     * @param string $select fieldlist to be selected
+     * @param string $from tablelist to select from
+     * @param string $where where clause
+     * @param string $orderBy order by clause
+     * @param string $groupBy group by clause
      * @return string
      */
     private function buildSelectQuery($select, $from, $where, $orderBy, $groupBy)
@@ -380,5 +383,4 @@ class Piwik_Segment
         $where = false;
         return $this->buildSelectQuery($select, $from, $where, $orderBy, $groupBy);
     }
-
 }

@@ -21,6 +21,11 @@
 		<english_name>Bulgarian</english_name>
 	</row>
 	<row>
+		<code>bs</code>
+		<name>bosanski jezik</name>
+		<english_name>Bosnian</english_name>
+	</row>
+	<row>
 		<code>ca</code>
 		<name>Català</name>
 		<english_name>Catalan</english_name>
@@ -94,6 +99,11 @@
 		<code>he</code>
 		<name>עברית</name>
 		<english_name>Hebrew</english_name>
+	</row>
+	<row>
+		<code>hi</code>
+		<name>मानक हिन्दी</name>
+		<english_name>Hindi</english_name>
 	</row>
 	<row>
 		<code>hr</code>
@@ -209,6 +219,11 @@
 		<code>sv</code>
 		<name>Svenska</name>
 		<english_name>Swedish</english_name>
+	</row>
+	<row>
+		<code>ta</code>
+		<name>தமிழ்</name>
+		<english_name>Tamil</english_name>
 	</row>
 	<row>
 		<code>te</code>

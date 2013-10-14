@@ -6,34 +6,27 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  * @category Piwik_Plugins
- * @package Piwik_VisitsSummary
+ * @package VisitsSummary
  */
+namespace Piwik\Plugins\VisitsSummary;
+
+use Piwik\Archive;
+use Piwik\MetricsFormatter;
+use Piwik\Piwik;
+use Piwik\SettingsPiwik;
 
 /**
  * VisitsSummary API lets you access the core web analytics metrics (visits, unique visitors,
  * count of actions (page views & downloads & clicks on outlinks), time on site, bounces and converted visits.
  *
- * @package Piwik_VisitsSummary
+ * @package VisitsSummary
  */
-class Piwik_VisitsSummary_API
+class API extends \Piwik\Plugin\API
 {
-    static private $instance = null;
-
-    /**
-     * @return Piwik_VisitsSummary_API
-     */
-    static public function getInstance()
-    {
-        if (self::$instance == null) {
-            self::$instance = new self;
-        }
-        return self::$instance;
-    }
-
     public function get($idSite, $period, $date, $segment = false, $columns = false)
     {
         Piwik::checkUserHasViewAccess($idSite);
-        $archive = Piwik_Archive::build($idSite, $period, $date, $segment);
+        $archive = Archive::build($idSite, $period, $date, $segment);
 
         // array values are comma separated
         $columns = Piwik::getArrayFromApiParameter($columns);
@@ -104,7 +97,7 @@ class Piwik_VisitsSummary_API
             'sum_visit_length',
             'max_actions'
         );
-        if (Piwik::isUniqueVisitorsEnabled($period)) {
+        if (SettingsPiwik::isUniqueVisitorsEnabled($period)) {
             $columns = array_merge(array('nb_uniq_visitors'), $columns);
         }
         $columns = array_values($columns);
@@ -114,7 +107,7 @@ class Piwik_VisitsSummary_API
     protected function getNumeric($idSite, $period, $date, $segment, $toFetch)
     {
         Piwik::checkUserHasViewAccess($idSite);
-        $archive = Piwik_Archive::build($idSite, $period, $date, $segment);
+        $archive = Archive::build($idSite, $period, $date, $segment);
         $dataTable = $archive->getDataTableFromNumeric($toFetch);
         return $dataTable;
     }
@@ -159,9 +152,9 @@ class Piwik_VisitsSummary_API
         $table = $this->getSumVisitsLength($idSite, $period, $date, $segment);
         if (is_object($table)) {
             $table->filter('ColumnCallbackReplace',
-                array('sum_visit_length', array('Piwik', 'getPrettyTimeFromSeconds')));
+                array('sum_visit_length', '\Piwik\MetricsFormatter::getPrettyTimeFromSeconds'));
         } else {
-            $table = Piwik::getPrettyTimeFromSeconds($table);
+            $table = MetricsFormatter::getPrettyTimeFromSeconds($table);
         }
         return $table;
     }

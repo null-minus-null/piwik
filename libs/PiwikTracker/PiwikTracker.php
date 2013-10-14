@@ -250,6 +250,7 @@ class PiwikTracker
     public function setNewVisitorId()
     {
         $this->visitorId = substr(md5(uniqid(rand(), true)), 0, self::LENGTH_VISITOR_ID);
+        $this->forcedVisitorId = false;
     }
 
     /**
@@ -370,7 +371,7 @@ class PiwikTracker
      *
      * @param string $keyword Searched query on the site
      * @param string $category Optional, Search engine category if applicable
-     * @param int $countResults results displayed on the search result page. Used to track "zero result" keywords.
+     * @param bool|int $countResults results displayed on the search result page. Used to track "zero result" keywords.
      *
      * @return mixed Response or true if using bulk requests.
      */
@@ -716,15 +717,10 @@ class PiwikTracker
      *
      * Allowed only for Admin/Super User, must be used along with setTokenAuth().
      *
-     * For example, on your website if you use the Javascript tracker in some pages
-     * and the PHP tracker in other pages, you can write:
-     *      $v->setVisitorId( $v->getVisitorId() );
-     *
-     * This will set this visitor's ID to the ID found in the 1st party Piwik cookies
-     * (created earlier by the Javascript tracker).
-     *
-     * Alternatively you can set the Visitor ID based on a user attribute, for example the user email:
+     * You may set the Visitor ID based on a user attribute, for example the user email:
      *      $v->setVisitorId( substr(md5( $userEmail ), 0, 16));
+     *
+     * If not set, the visitor ID will be fetched from the 1st party cookie, or will be set to a random UUID.
      *
      * @see setTokenAuth()
      * @param string $visitorId 16 hexadecimal characters visitor ID, eg. "33c31e01394bdc63"
@@ -780,7 +776,7 @@ class PiwikTracker
      * This function will only work if the user is initiating the current request, and his cookies
      * can be read by PHP from the $_COOKIE array.
      *
-     * @return string JSON Encoded string containing the Referer information for Goal conversion attribution.
+     * @return string JSON Encoded string containing the Referrer information for Goal conversion attribution.
      *                Will return false if the cookie could not be found
      * @see Piwik.js getAttributionInfo()
      */
@@ -927,8 +923,6 @@ class PiwikTracker
             return true;
         }
 
-        $response = '';
-
         if (!$this->cookieSupport) {
             $this->requestCookie = '';
         }
@@ -1052,7 +1046,7 @@ class PiwikTracker
 
             // Only allowed for Super User, token_auth required,
             (!empty($this->ip) ? '&cip=' . $this->ip : '') .
-            (!empty($this->forcedVisitorId) ? '&cid=' . $this->forcedVisitorId : '&_id=' . $this->visitorId) .
+            (!empty($this->forcedVisitorId) ? '&cid=' . $this->forcedVisitorId : '&_id=' . $this->getVisitorId()) .
             (!empty($this->forcedDatetime) ? '&cdt=' . urlencode($this->forcedDatetime) : '') .
             ((!empty($this->token_auth) && !$this->doBulkRequests) ? '&token_auth=' . urlencode($this->token_auth) : '') .
 

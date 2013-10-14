@@ -8,26 +8,34 @@
  * @category Piwik
  * @package Piwik
  */
+namespace Piwik\Tracker;
+
+use Piwik\ArchiveProcessor\Rules;
+use Piwik\CacheFile;
+use Piwik\Config;
+use Piwik\Option;
+use Piwik\Piwik;
+use Piwik\Tracker;
 
 /**
  * Simple cache mechanism used in Tracker to avoid requesting settings from mysql on every request
  *
  * @package Piwik
- * @subpackage Piwik_Tracker
+ * @subpackage Tracker
  */
-class Piwik_Tracker_Cache
+class Cache
 {
     /**
      * Public for tests only
-     * @var Piwik_CacheFile
+     * @var CacheFile
      */
     static public $trackerCache = null;
 
     static protected function getInstance()
     {
         if (is_null(self::$trackerCache)) {
-            $ttl = Piwik_Config::getInstance()->Tracker['tracker_cache_file_ttl'];
-            self::$trackerCache = new Piwik_CacheFile('tracker', $ttl);
+            $ttl = Config::getInstance()->Tracker['tracker_cache_file_ttl'];
+            self::$trackerCache = new CacheFile('tracker', $ttl);
         }
         return self::$trackerCache;
     }
@@ -47,14 +55,18 @@ class Piwik_Tracker_Cache
             return $cacheContent;
         }
 
-        Piwik_Tracker::initCorePiwikInTrackerMode();
+        Tracker::initCorePiwikInTrackerMode();
 
         // save current user privilege and temporarily assume super user privilege
         $isSuperUser = Piwik::isUserIsSuperUser();
         Piwik::setUserIsSuperUser();
 
         $content = array();
-        Piwik_PostEvent('Common.fetchWebsiteAttributes', $content, $idSite);
+        /**
+         * This hook is called to get the details of a specific site depending on the id. You can use this to add any
+         * custom attributes to the website.
+         */
+        Piwik::postEvent('Site.getSiteAttributes', array(&$content, $idSite));
 
         // restore original user privilege
         Piwik::setUserIsSuperUser($isSuperUser);
@@ -92,12 +104,17 @@ class Piwik_Tracker_Cache
             return $cacheContent;
         }
 
-        Piwik_Tracker::initCorePiwikInTrackerMode();
+        Tracker::initCorePiwikInTrackerMode();
         $cacheContent = array(
-            'isBrowserTriggerEnabled' => Piwik_ArchiveProcessor_Rules::isBrowserTriggerEnabled(),
-            'lastTrackerCronRun'               => Piwik_GetOption('lastTrackerCronRun'),
-            'currentLocationProviderId'        => Piwik_UserCountry_LocationProvider::getCurrentProviderId(),
+            'isBrowserTriggerEnabled' => Rules::isBrowserTriggerEnabled(),
+            'lastTrackerCronRun'      => Option::get('lastTrackerCronRun'),
         );
+
+        /**
+         * This event is triggered to add any custom content to the Tracker cache. You may want to cache any tracker
+         * data that is expensive to re-calculate on each tracking request.
+         */
+        Piwik::postEvent('Tracker.setTrackerCacheGeneral', array(&$cacheContent));
         self::setCacheGeneral($cacheContent);
         return $cacheContent;
     }
@@ -119,7 +136,7 @@ class Piwik_Tracker_Cache
     /**
      * Regenerate Tracker cache files
      *
-     * @param array $idSites  Array of idSites to clear cache for
+     * @param array|int $idSites Array of idSites to clear cache for
      */
     static public function regenerateCacheWebsiteAttributes($idSites = array())
     {
@@ -135,7 +152,7 @@ class Piwik_Tracker_Cache
     /**
      * Delete existing Tracker cache
      *
-     * @param string $idSite  (website ID of the site to clear cache for
+     * @param string $idSite (website ID of the site to clear cache for
      */
     static public function deleteCacheWebsiteAttributes($idSite)
     {
@@ -150,5 +167,4 @@ class Piwik_Tracker_Cache
     {
         self::getInstance()->deleteAll();
     }
-
 }
